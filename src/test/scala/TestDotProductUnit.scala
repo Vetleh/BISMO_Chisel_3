@@ -34,6 +34,7 @@ import chisel3._
 import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
 import chisel3.experimental.BundleLiterals._
+import BISMOTestHelper._
 
 /**
   * This is a trivial example of how to run this Specification
@@ -47,10 +48,43 @@ import chisel3.experimental.BundleLiterals._
   * }}}
   */
 class TestDotProduct extends AnyFreeSpec with ChiselScalatestTester {
-  
   "DotProductUnit test" in {
-    test(new DotProductUnit(new DotProductUnitParams(new PopCountUnitParams(3), 10, 3))) { dut =>
+    test(new DotProductUnit(new DotProductUnitParams(new PopCountUnitParams(10), 10, 3))) { c =>
       
+      val r = scala.util.Random
+      // number of re-runs for each test
+      val num_seqs = 1
+      // number of bits in each operand
+      val pc_len = 10
+      // max shift steps for random input
+      val max_shift = 8
+      // latency from inputs changed to accumulate update
+      val latency = c.p.getLatency()
+      
+     
+      for(i <- 1 to num_seqs) {
+        // clear accumulator between runs
+        // clearAcc()
+        // // produce random binary test vectors and golden result
+        val seqA = BISMOTestHelper.randomIntVector(pc_len, 1, false)
+        val seqB = BISMOTestHelper.randomIntVector(pc_len, 1, false)
+        val golden = BISMOTestHelper.dotProduct(seqA, seqB)
+        
+        c.io.in.bits.a.poke(scala.math.BigInt.apply(seqA.mkString, 2))
+        c.io.in.bits.b.poke(scala.math.BigInt.apply(seqB.mkString, 2))
+
+        c.io.in.bits.shiftAmount.poke(0)
+        c.io.in.bits.negate.poke(0)
+        c.io.in.valid.poke(1)
+        
+        c.clock.step(1)
+        
+        // remove valid input in next cycle
+        c.io.in.valid.poke(0)
+        c.clock.step(latency-1)
+        println(c.io.out.peek())
+        c.io.out.expect(golden)
+      }
 
     }
   }

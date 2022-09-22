@@ -1,5 +1,6 @@
-import Chisel._
-
+import chisel3._
+import chisel3.util._
+//import Chisel._
 
 // The DotProductUnit computes a binary dot product over time,
 // with possibilities for shifting (for weighting by powers-of-two)
@@ -93,10 +94,10 @@ class DotProductStage4(p: DotProductUnitParams) extends Bundle {
 }
 
 class DotProductUnit(val p: DotProductUnitParams) extends Module {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     val in = Input(Valid(new DotProductStage0(p)))
     val out = Output(UInt(p.accWidth.W))
-  }
+  })
   // instantiate the popcount unit
   val modPopCount = Module(new PopCountUnit(p.pcParams))
   //when(io.in.valid) { printf("DPU operands are %x and %x\n", io.in.bits.a, io.in.bits.b) }
@@ -110,8 +111,8 @@ class DotProductUnit(val p: DotProductUnitParams) extends Module {
 
 
   // pipeline stage 0: register the input
-  val regStage0_v = RegNext(Wire(regInput.valid), false.B)
-  val regStage0_b = RegNext(Wire(regInput.bits))
+  val regStage0_v = RegNext(regInput.valid, false.B)
+  val regStage0_b = RegNext(regInput.bits)
   //when(regStage0_v) { printf("Stage0: a %x b %x shift %d neg %d clear %d\n", regStage0_b.a, regStage0_b.b, regStage0_b.shiftAmount, regStage0_b.negate, regStage0_b.clear_acc)}
 
   // pipeline stage 1: AND the bit vector inputs
@@ -122,7 +123,7 @@ class DotProductUnit(val p: DotProductUnitParams) extends Module {
   stage1.clear_acc := regStage0_b.clear_acc
   val regStage1_v = RegNext(regStage0_v, false.B)
   val regStage1_b = RegNext(stage1)
-  //when(regStage1_v) { printf("Stage1: andResult %x shift %d neg %d clear %d\n", regStage1_b.andResult, regStage1_b.shiftAmount, regStage1_b.negate, regStage1_b.clear_acc)}
+  when(regStage1_v) { printf("Stage1: andResult %x shift %d neg %d clear %d\n", regStage1_b.andResult, regStage1_b.shiftAmount, regStage1_b.negate, regStage1_b.clear_acc)}
 
   // pipeline stage 2: popcount the result of AND
   val stage2 = Wire(new DotProductStage2(p))
