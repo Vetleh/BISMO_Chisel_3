@@ -49,7 +49,7 @@ import chisel3.experimental.BundleLiterals._
 class TestDotProduct extends AnyFreeSpec with ChiselScalatestTester {
   
   "DotProductUnit test" in {
-    test(new DotProductUnit(new DotProductUnitParams(10, 10))) { dut =>
+    test(new DotProductUnit(new DotProductUnitParams(new PopCountUnitParams(3), 10, 3))) { dut =>
       
 
     }

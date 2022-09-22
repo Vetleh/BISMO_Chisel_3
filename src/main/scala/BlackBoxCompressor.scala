@@ -42,7 +42,7 @@ class BlackBoxCompressorParams(
   val WD: Int = 1, // input operand 1 precision
   val WC: Int = 1 // input operand 2 precision
 // compressor tree depth. set to -1 for maximum.
-) extends PrintableParam {
+) {
   def headersAsList(): List[String] = {
     return List("Dk", "WA", "WB", "BBCompressorLatency")
   }
