@@ -21,4 +21,20 @@ object BISMOTestHelper{
             return seq
         }
     }
+
+    // extract bit position at pos from number in
+     def extractBitPos(in: Int, pos: Int, nBits: Int): Int = {
+       val negOffset = (1 << (nBits-1))
+       if(in < 0) {
+         return ((in + 2*negOffset) & (1 << pos)) >> pos
+       } else {
+         return (in & (1 << pos)) >> pos
+       }
+     }
+
+     // convert a sequence of integers into bit-serial form
+     // e.g. [2, 0, 3] turns to [[0, 0, 1], [1, 0, 1]]
+     def intVectorToBitSerial(in: Seq[Int], nBits: Int): Seq[Seq[Int]] = {
+       for(i <- 0 to nBits-1) yield in.map(x => extractBitPos(x, i, nBits))
+     }
 }

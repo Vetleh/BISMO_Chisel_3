@@ -96,7 +96,7 @@ class DotProductStage4(p: DotProductUnitParams) extends Bundle {
 class DotProductUnit(val p: DotProductUnitParams) extends Module {
   val io = IO(new Bundle {
     val in = Input(Valid(new DotProductStage0(p)))
-    val out = Output(UInt(p.accWidth.W))
+    val out = Output(SInt(p.accWidth.W))
   })
   // instantiate the popcount unit
   val modPopCount = Module(new PopCountUnit(p.pcParams))
@@ -123,7 +123,7 @@ class DotProductUnit(val p: DotProductUnitParams) extends Module {
   stage1.clear_acc := regStage0_b.clear_acc
   val regStage1_v = RegNext(regStage0_v, false.B)
   val regStage1_b = RegNext(stage1)
-  when(regStage1_v) { printf("Stage1: andResult %x shift %d neg %d clear %d\n", regStage1_b.andResult, regStage1_b.shiftAmount, regStage1_b.negate, regStage1_b.clear_acc)}
+  //when(regStage1_v) { printf("Stage1: andResult %x shift %d neg %d clear %d\n", regStage1_b.andResult, regStage1_b.shiftAmount, regStage1_b.negate, regStage1_b.clear_acc)}
 
   // pipeline stage 2: popcount the result of AND
   val stage2 = Wire(new DotProductStage2(p))
@@ -175,5 +175,5 @@ class DotProductUnit(val p: DotProductUnitParams) extends Module {
   }
 
   // expose the accumulator output directly
-  io.out := regAcc
+  io.out := regAcc.asSInt
 }
