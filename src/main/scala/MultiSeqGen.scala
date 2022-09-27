@@ -32,6 +32,8 @@ class MultiSeqGenCtrl(p: MultiSeqGenParams) extends Bundle {
   val init = Input(UInt(p.w.W))
   val count = Input(UInt(p.a.W))
   val step = Input(UInt(p.w.W))
+
+  override def cloneType = new MultiSeqGenCtrl(p).asInstanceOf[this.type]
 }
 
 class MultiSeqGen(p: MultiSeqGenParams) extends Module {

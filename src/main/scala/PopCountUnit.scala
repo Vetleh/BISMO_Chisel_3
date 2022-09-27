@@ -68,11 +68,11 @@ class PopCount36to6() extends Module {
     val in = Input(Bits(36.W))
     val out = Output(UInt(6.W))
   })
-  val stage1 = VecInit.fill(6) { Module(new PopCount6to3()).io }
+  val stage1 = VecInit(Seq.fill(6) { Module(new PopCount6to3()).io })
   for (i <- 0 until 6) {
     stage1(i).in := io.in((i + 1) * 6 - 1, i * 6)
   }
-  val stage2 = VecInit.fill(3) { Module(new PopCount6to3()).io }
+  val stage2 = VecInit(Seq.fill(3) { Module(new PopCount6to3()).io })
   for (i <- 0 until 3) {
     stage2(i).in := Cat(stage1.map(_.out(i)))
   }
@@ -97,9 +97,11 @@ class PopCountUnit(
     // the number 2.
     val out = Output(UInt(log2Up(p.numInputBits + 1).W))
   })
-  val pcs = VecInit.fill(p.getNumCompressors()) {
-    Module(new PopCount36to6()).io
-  }
+  val pcs = VecInit(
+    Seq.fill(p.getNumCompressors()) {
+      Module(new PopCount36to6()).io
+    }
+  )
   val inWire = p.padInput(io.in)
   val inReg = ShiftRegister(inWire, p.defaultInputRegs + p.extraPipelineRegs)
   val outWire = Wire(UInt(log2Up(p.numInputBits + 1).W))

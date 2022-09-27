@@ -43,16 +43,17 @@ class DotProductArray(val p: DotProductArrayParams) extends Module {
     val b = Input(Vec(p.m, Bits(p.dpuParams.pcParams.numInputBits.W)))
     // DPU outputs from each accumulator
     // val out = Output(Vec(p.m, Vec(p.n, UInt(p.dpuParams.accWidth.W))))
-    val out = Output(Vec(p.m, Vec(p.n, SInt(p.dpuParams.accWidth.W))))
+    val out = Output(VecInit(Seq.fill(p.m) {
+      VecInit(Seq.fill(p.n) { SInt(p.dpuParams.accWidth.W) })
+    }))
   })
 
-  // val a =  VecInit.fill(p.m) { io.tempA }
-  // val b =  VecInit.fill(p.m) { io.tempB }
-
   // instantiate the array of DPUs
-  val dpu = VecInit.fill(p.m, p.n) {
-    Module(new DotProductUnit(p.dpuParams)).io
-  }
+  val dpu = VecInit(Seq.fill(p.m) {
+    VecInit(Seq.fill(p.n) {
+      Module(new DotProductUnit(p.dpuParams)).io
+    })
+  })
 
   // connect the array of DPUs to the inputs
   for (i <- 0 to p.m - 1) {

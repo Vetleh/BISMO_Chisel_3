@@ -34,13 +34,13 @@ package bismo
 
 import chisel3._
 import chiseltest._
-import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
 
 // TODO fix input params to a more general state
-class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
-  "DotProductUnit test" in {
+class TestDotProductUnit extends FlatSpec with ChiselScalatestTester {
+  "DPU" should "Work!" in {
     test(
       new DotProductUnit(
         new DotProductUnitParams(new PopCountUnitParams(10), 32, 16)
@@ -60,7 +60,7 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
       // wait up to <latency> cycles with valid=0 to create pipeline bubbles
       def randomNoValidWait(max: Int = latency) = {
         val numNoValidCycles = r.nextInt(max + 1)
-        c.io.in.valid.poke(0)
+        c.io.in.valid.poke(0.B)
         c.clock.step(numNoValidCycles)
       }
 
@@ -70,13 +70,13 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
         // normally the testbench would just set the clear_acc of the very
         // first test vector to 1 alongside the regular data, and to 0 after,
         // but this also works.
-        c.io.in.bits.a.poke(0)
-        c.io.in.bits.b.poke(0)
-        c.io.in.bits.clear_acc.poke(1)
-        c.io.in.valid.poke(1)
+        c.io.in.bits.a.poke(0.U)
+        c.io.in.bits.b.poke(0.U)
+        c.io.in.bits.clear_acc.poke(1.B)
+        c.io.in.valid.poke(1.B)
         c.clock.step(1)
-        c.io.in.bits.clear_acc.poke(0)
-        c.io.in.valid.poke(0)
+        c.io.in.bits.clear_acc.poke(0.B)
+        c.io.in.valid.poke(0.B)
         if (waitUntilCleared) {
           c.clock.step(latency)
         }
@@ -84,10 +84,10 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
 
       // clear accumulators, wait until clear is visible
       clearAcc(waitUntilCleared = true)
-      c.io.out.expect(0)
+      c.io.out.expect(0.S)
       c.clock.step(10)
       // accumulator should retain value without any valid input
-      c.io.out.expect(0)
+      c.io.out.expect(0.S)
 
       for (i <- 1 to num_seqs) {
         // clear accumulator between runs
@@ -97,18 +97,18 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
         val seqB = BISMOTestHelper.randomIntVector(pc_len, 1, false)
         val golden = BISMOTestHelper.dotProduct(seqA, seqB)
 
-        c.io.in.bits.a.poke(scala.math.BigInt.apply(seqA.mkString, 2))
-        c.io.in.bits.b.poke(scala.math.BigInt.apply(seqB.mkString, 2))
+        c.io.in.bits.a.poke(scala.math.BigInt.apply(seqA.mkString, 2).U)
+        c.io.in.bits.b.poke(scala.math.BigInt.apply(seqB.mkString, 2).U)
 
-        c.io.in.bits.shiftAmount.poke(0)
-        c.io.in.bits.negate.poke(0)
-        c.io.in.valid.poke(1)
+        c.io.in.bits.shiftAmount.poke(0.U)
+        c.io.in.bits.negate.poke(0.B)
+        c.io.in.valid.poke(1.B)
 
         c.clock.step(1)
 
-        c.io.in.valid.poke(0)
+        c.io.in.valid.poke(0.B)
         c.clock.step(latency - 1)
-        c.io.out.expect(golden)
+        c.io.out.expect(golden.S)
       }
 
       // test 2: binary, unsigned vectors that do not fit into popCountWidth
@@ -128,20 +128,20 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
           // push in next slice of bit vector
           val curA = seqA.slice(j * pc_len, (j + 1) * pc_len)
           val curB = seqB.slice(j * pc_len, (j + 1) * pc_len)
-          c.io.in.bits.a.poke(scala.math.BigInt.apply(curA.mkString, 2))
-          c.io.in.bits.b.poke(scala.math.BigInt.apply(curB.mkString, 2))
-          c.io.in.bits.shiftAmount.poke(0)
-          c.io.in.bits.negate.poke(0)
-          c.io.in.valid.poke(1)
+          c.io.in.bits.a.poke(scala.math.BigInt.apply(curA.mkString, 2).U)
+          c.io.in.bits.b.poke(scala.math.BigInt.apply(curB.mkString, 2).U)
+          c.io.in.bits.shiftAmount.poke(0.U)
+          c.io.in.bits.negate.poke(0.B)
+          c.io.in.valid.poke(1.B)
           c.clock.step(1)
           // emulate random pipeline bubbles
           randomNoValidWait()
         }
         // remove valid input in next cycle
-        c.io.in.valid.poke(0)
+        c.io.in.valid.poke(0.B)
         // wait until all inputs are processed
         c.clock.step(latency - 1)
-        c.io.out.expect(golden)
+        c.io.out.expect(golden.S)
       }
 
       // test 3: multibit unsigned and signed integers
@@ -175,7 +175,7 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
             val negbitB = negB & (bitB == precB - 1)
             val doNeg = if (negbitA ^ negbitB) 1 else 0
             // shift is equal to sum of current bit positions
-            c.io.in.bits.shiftAmount.poke(bitA + bitB)
+            c.io.in.bits.shiftAmount.poke((bitA + bitB).U)
             for (j <- 0 to seq_len - 1) {
               // push in next slice of bit vector from correct bit position
               val curA = seqA_bs(bitA).slice(j * pc_len, (j + 1) * pc_len)
@@ -184,10 +184,10 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
                 curA,
                 curB
               ) << (bitA + bitB)
-              c.io.in.bits.a.poke(scala.math.BigInt.apply(curA.mkString, 2))
-              c.io.in.bits.b.poke(scala.math.BigInt.apply(curB.mkString, 2))
-              c.io.in.bits.negate.poke(doNeg)
-              c.io.in.valid.poke(1)
+              c.io.in.bits.a.poke(scala.math.BigInt.apply(curA.mkString, 2).U)
+              c.io.in.bits.b.poke(scala.math.BigInt.apply(curB.mkString, 2).U)
+              c.io.in.bits.negate.poke(doNeg.B)
+              c.io.in.valid.poke(1.B)
               c.clock.step(1)
               // emulate random pipeline bubbles
               randomNoValidWait()
@@ -195,10 +195,10 @@ class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
           }
         }
         // remove valid input in next cycle
-        c.io.in.valid.poke(0)
+        c.io.in.valid.poke(0.B)
         // wait until all inputs are processed
         c.clock.step(latency - 1)
-        c.io.out.expect(golden)
+        c.io.out.expect(golden.S)
       }
     }
   }

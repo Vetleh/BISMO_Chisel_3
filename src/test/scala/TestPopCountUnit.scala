@@ -34,13 +34,14 @@ package bismo
 
 import chisel3._
 import chiseltest._
-import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
 
 // TODO fix input params to a more general state
-class TestPopCountUnit extends AnyFreeSpec with ChiselScalatestTester {
-  "PopCountUnit test" in {
+class TestPopCountUnit extends FlatSpec with ChiselScalatestTester {
+  behavior of "Pop count unit"
+  it should "Work!" in {
     test(new PopCountUnit(new PopCountUnitParams(10))) { c =>
       val r = scala.util.Random
       // number of sequences to test
@@ -52,21 +53,21 @@ class TestPopCountUnit extends AnyFreeSpec with ChiselScalatestTester {
 
       def cleanTest(test_seq_str: String, golden: Int) = {
         // clear the pipeline by putting in zeros
-        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2))
+        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2).U)
         c.clock.step(1)
-        c.io.in.poke(scala.math.BigInt.apply(test_seq_str, 2))
+        c.io.in.poke(scala.math.BigInt.apply(test_seq_str, 2).U)
         c.clock.step(1)
-        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2))
+        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2).U)
         for (i <- 0 until latency - 2) {
           c.clock.step(1)
           c.io.out.peek()
         }
         // step(latency-2)
-        c.io.out.expect(0)
+        c.io.out.expect(0.U)
         c.clock.step(1)
-        c.io.out.expect(golden)
+        c.io.out.expect(golden.U)
         c.clock.step(1)
-        c.io.out.expect(0)
+        c.io.out.expect(0.U)
       }
       // test all-zeroes and all-ones
       cleanTest("0" * seq_len, 0)
