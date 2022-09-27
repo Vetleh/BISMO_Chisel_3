@@ -57,6 +57,9 @@ class DotProductStage0(p: DotProductUnitParams) extends Bundle {
   // whether to clear the accumulator before adding the new result
   val clear_acc = Bool()
 
+  override def cloneType: this.type =
+    new DotProductStage0(p).asInstanceOf[this.type]
+
 }
 
 // Bundles of partially-processed input through the pipelined datapath
@@ -69,6 +72,9 @@ class DotProductStage1(p: DotProductUnitParams) extends Bundle {
   val negate = Bool()
   // whether to clear the accumulator before adding the new result
   val clear_acc = Bool()
+
+  override def cloneType: this.type =
+    new DotProductStage1(p).asInstanceOf[this.type]
 }
 
 class DotProductStage2(p: DotProductUnitParams) extends Bundle {
@@ -81,6 +87,9 @@ class DotProductStage2(p: DotProductUnitParams) extends Bundle {
   // whether to clear the accumulator before adding the new result
   val clear_acc = Bool()
 
+  override def cloneType: this.type =
+    new DotProductStage2(p).asInstanceOf[this.type]
+
 }
 
 class DotProductStage3(p: DotProductUnitParams) extends Bundle {
@@ -91,6 +100,9 @@ class DotProductStage3(p: DotProductUnitParams) extends Bundle {
   // whether to clear the accumulator before adding the new result
   val clear_acc = Bool()
 
+  override def cloneType: this.type =
+    new DotProductStage3(p).asInstanceOf[this.type]
+
 }
 
 class DotProductStage4(p: DotProductUnitParams) extends Bundle {
@@ -98,6 +110,9 @@ class DotProductStage4(p: DotProductUnitParams) extends Bundle {
   val negateResult = UInt(p.accWidth.W)
   // whether to clear the accumulator before adding the new result
   val clear_acc = Bool()
+
+  override def cloneType: this.type =
+    new DotProductStage4(p).asInstanceOf[this.type]
 
 }
 
