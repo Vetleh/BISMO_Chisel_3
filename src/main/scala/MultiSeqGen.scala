@@ -53,11 +53,11 @@ class MultiSeqGen(p: MultiSeqGenParams) extends Module {
   val sIdle :: sRun :: Nil = Enum(2)
   val regState = RegInit(sIdle)
 
-  /*printf("regState = %d\n", regState)
-  printf("regSeqElem = %d\n", regSeqElem)
-  printf("regCounter = %d\n", regCounter)
-  printf("regMaxCount = %d\n", regMaxCount)
-  printf("regStep = %d\n", regStep)*/
+  // printf("regState = %d\n", regState)
+  // printf("regSeqElem = %d\n", regSeqElem)
+  // printf("regCounter = %d\n", regCounter)
+  // printf("regMaxCount = %d\n", regMaxCount)
+  // printf("regStep = %d\n", regStep)
 
   switch(regState) {
     is(sIdle) {

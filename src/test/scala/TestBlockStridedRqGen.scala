@@ -37,49 +37,49 @@ import chiseltest._
 import org.scalatest._
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
+import fpgatidbits.PlatformWrapper._
 
 // TODO fix input params to a more general state
-class TestPopCountUnit extends FreeSpec with ChiselScalatestTester {
-
-  // Initiating popCountUnit with values
-  val numInputBits = 10
-  val popCountUnitParamsInstance = new PopCountUnitParams(numInputBits)
-
-  "PopCountUnit test" in {
-    test(new PopCountUnit(popCountUnitParamsInstance)) { c =>
+class TestBlockStridedRqGen extends FreeSpec with ChiselScalatestTester {
+  "Block strided rq gen test" in {
+    test(new BlockStridedRqGen(PYNQZ1Params.toMemReqParams(), true, 0)) { c =>
       val r = scala.util.Random
-      // number of sequences to test
-      val num_seqs = 10
-      // length of each sequence in bits, equal to popcount width
-      val seq_len = c.p.numInputBits
-      // latency in cycles from input updated to result updated
-      val latency = c.p.getLatency()
+      val base_offs: Int = 0x1000
+      val nblocks: Int = 2
+      val block_offs: Int = 0x100
+      val intra_step: Int = 1
+      val block_size: Int = 4
 
-      def cleanTest(test_seq_str: String, golden: Int) = {
-        // clear the pipeline by putting in zeros
-        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2).U)
+      c.io.block_intra_step.poke(intra_step.U)
+      c.io.block_intra_count.poke(block_size.U)
+
+      c.io.in.bits.base.poke(base_offs.U)
+      c.io.in.bits.block_step.poke(block_offs.U)
+      c.io.in.bits.block_count.poke(nblocks.U)
+
+      c.io.in.valid.poke(1.B)
+      c.clock.step(1)
+      c.io.in.valid.poke(0.B)
+
+      c.io.out.ready.poke(1.B)
+
+      for (n <- 0 until 50) {
         c.clock.step(1)
-        c.io.in.poke(scala.math.BigInt.apply(test_seq_str, 2).U)
-        c.clock.step(1)
-        c.io.in.poke(scala.math.BigInt.apply("0" * seq_len, 2).U)
-        for (i <- 0 until latency - 2) {
-          c.clock.step(1)
-          c.io.out.peek()
-        }
-        // step(latency-2)
-        c.io.out.expect(0.U)
-        c.clock.step(1)
-        c.io.out.expect(golden.U)
-        c.clock.step(1)
-        c.io.out.expect(0.U)
       }
-      // test all-zeroes and all-ones
-      cleanTest("0" * seq_len, 0)
-      cleanTest("1" * seq_len, seq_len)
 
-      for (seq_cnq <- 1 to num_seqs) {
-        val test_seq = BISMOTestHelper.randomIntVector(seq_len, 1, false)
-        cleanTest(test_seq.mkString, test_seq.reduce(_ + _))
+      for (b <- 0 until nblocks) {
+        for (i <- 0 until block_size) {
+
+          while (c.io.out.valid.peek() != 1.B) {
+            c.clock.step(1)
+          }
+          c.io.out.bits.addr.expect(
+            (base_offs + block_offs * b + i * intra_step).U
+          )
+          c.io.out.bits.numBytes.expect(intra_step.U)
+          c.io.out.bits.isWrite.expect(1.B)
+          c.clock.step(1)
+        }
       }
     }
   }

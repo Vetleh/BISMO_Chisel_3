@@ -8,8 +8,12 @@ import BISMOTestHelper._
 
 // TODO fix input params to a more general state
 class TestMultiSeqGen extends FreeSpec with ChiselScalatestTester {
+  val w = 64
+  val a = 10
+  val msgParams = new MultiSeqGenParams(w, a)
+
   "MultiSeqGen test" in {
-    test(new MultiSeqGen(new MultiSeqGenParams(64, 10))) { c =>
+    test(new MultiSeqGen(msgParams)) { c =>
       val r = scala.util.Random
       c.io.in.bits.init.poke(0.U)
       c.io.in.bits.count.poke(10.U)

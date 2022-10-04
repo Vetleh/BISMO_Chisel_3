@@ -28,9 +28,9 @@ def javacOptionsVersion(scalaVersion: String): Seq[String] = {
   }
 }
 
-name := "fpga-tidbits"
+name := "BISMO_Chisel_3"
 
-version := "3.4.0"
+version := "3.4.4"
 
 //scalaVersion := "2.11.6"
 scalaVersion := "2.12.10"
