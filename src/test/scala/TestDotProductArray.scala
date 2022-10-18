@@ -34,24 +34,37 @@ package bismo
 
 import chisel3._
 import chiseltest._
+import chiseltest.simulator.WriteVcdAnnotation
 import org.scalatest.freespec.AnyFreeSpec
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
 
 class TestDotProductArray extends AnyFreeSpec with ChiselScalatestTester {
+  // PopCountUnit init
+  val num_input_bits = 10
+  val pop_count_unit_params = new PopCountUnitParams(num_input_bits)
+
+  // DotProduct init
+  val acc_width = 10
+  val max_shift_steps = 3
+  val dot_product_unit_params =
+    new DotProductUnitParams(pop_count_unit_params, acc_width, max_shift_steps)
+
+  // DoProductArray params init
+  val m = 10
+  val n = 10
+  val dot_product_array_params =
+    new DotProductArrayParams(dot_product_unit_params, m, n)
+
   "DotProductArray test" in {
     test(
       new DotProductArray(
-        new DotProductArrayParams(
-          new DotProductUnitParams(new PopCountUnitParams(10), 10, 3),
-          10,
-          10
-        )
+        dot_product_array_params
       )
-    ) { c =>
+    ).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
       val r = scala.util.Random
       // number of re-runs for each test
-      val num_seqs = 1
+      val num_seqs = 100
       // number of bits in each operand
       val pc_len = c.p.dpuParams.pcParams.numInputBits
       // max shift steps for random input
@@ -91,7 +104,6 @@ class TestDotProductArray extends AnyFreeSpec with ChiselScalatestTester {
         val golden = BISMOTestHelper.matrixProduct(a, b)
         // iterate over each combination of bit positions for bit serial
         for (bitA <- 0 to precA - 1) {
-
           val negbitA = negA & (bitA == precA - 1)
           for (bitB <- 0 to precB - 1) {
             // enable negation if combination of bit positions is negative

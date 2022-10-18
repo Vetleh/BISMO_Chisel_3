@@ -38,10 +38,13 @@ import org.scalatest.freespec.AnyFreeSpec
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
 
-// TODO fix input params to a more general state
 class TestPopCountUnit extends AnyFreeSpec with ChiselScalatestTester {
+  // PopCountUnitParams init
+  val num_input_bits = 10
+  val pop_count_unit_params = new PopCountUnitParams(num_input_bits)
+
   "PopCountUnit test" in {
-    test(new PopCountUnit(new PopCountUnitParams(10))) { c =>
+    test(new PopCountUnit(pop_count_unit_params)) { c =>
       val r = scala.util.Random
       // number of sequences to test
       val num_seqs = 10
