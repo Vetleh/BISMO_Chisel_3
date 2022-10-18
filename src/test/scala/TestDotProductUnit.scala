@@ -34,18 +34,30 @@ package bismo
 
 import chisel3._
 import chiseltest._
+import chiseltest.simulator.WriteVcdAnnotation
 import org.scalatest.freespec.AnyFreeSpec
 import chisel3.experimental.BundleLiterals._
 import BISMOTestHelper._
 
 // TODO fix input params to a more general state
 class TestDotProductUnit extends AnyFreeSpec with ChiselScalatestTester {
+
+  // PopCountUnit init
+  val num_input_bits = 10
+  val pop_count_unit_params = new PopCountUnitParams(num_input_bits)
+
+  // DotProductUnit init
+  val acc_width = 32
+  val max_shift_steps = 16
+  val dot_product_unit_params =
+    new DotProductUnitParams(pop_count_unit_params, acc_width, max_shift_steps)
+
   "DotProductUnit test" in {
     test(
       new DotProductUnit(
-        new DotProductUnitParams(new PopCountUnitParams(10), 32, 16)
+        dot_product_unit_params
       )
-    ) { c =>
+    ).withAnnotations(Seq(WriteVcdAnnotation)) { c =>
       val r = scala.util.Random
       // number of re-runs for each test
       val num_seqs = 100
