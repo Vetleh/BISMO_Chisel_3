@@ -14,7 +14,7 @@ import fpgatidbits.streams._
 
 // make the instantiated config options available to softare at runtime
 class BitSerialMatMulHWCfg(bitsPerField: Int) extends Bundle {
-  val readChanWidth = UInt(bitsPerField.W)
+  val readChanWidth =UInt(bitsPerField.W)
   val writeChanWidth = UInt(bitsPerField.W)
   val dpaDimLHS = UInt(bitsPerField.W)
   val dpaDimRHS = UInt(bitsPerField.W)
@@ -84,7 +84,7 @@ class BitSerialMatMulParams(
   }
 
   def asHWCfgBundle(bitsPerField: Int): BitSerialMatMulHWCfg = {
-    val ret = new BitSerialMatMulHWCfg(bitsPerField)
+    val ret = Wire(new BitSerialMatMulHWCfg(bitsPerField))
     ret.readChanWidth := mrp.dataWidth.U
     ret.writeChanWidth := mrp.dataWidth.U
     ret.dpaDimLHS := dpaDimLHS.U

@@ -87,16 +87,8 @@ class ResultStage(val myP: ResultStageParams) extends Module {
     val csr = Input(new ResultStageCtrlIO(myP))
     val dram = new ResultStageDRAMIO(myP)
     // interface towards result memory
-    val resmem_req = Output(VecInit.fill(myP.dpa_lhs) {
-      VecInit.fill(myP.dpa_rhs) {
-        new OCMRequest(myP.accWidth, log2Up(myP.resEntriesPerMem))
-      }
-    })
-    val resmem_rsp = Input(VecInit.fill(myP.dpa_lhs) {
-      VecInit.fill(myP.dpa_rhs) {
-        new OCMResponse(myP.accWidth)
-      }
-    })
+    val resmem_req = Vec(myP.dpa_lhs, Vec(myP.dpa_rhs, Output(new OCMRequest(myP.accWidth, log2Up(myP.resEntriesPerMem)))))
+    val resmem_rsp = Vec(myP.dpa_lhs, Vec(myP.dpa_rhs, Input(new OCMResponse(myP.accWidth))))
   })
   // TODO add burst support, single beat for now
   val bytesPerBeat: Int = myP.mrp.dataWidth / 8
@@ -104,8 +96,8 @@ class ResultStage(val myP: ResultStageParams) extends Module {
   // instantiate downsizer
   val ds = Module(
     new StreamResizer(
-      inWidth = myP.getTotalAccBits(),
-      outWidth = myP.mrp.dataWidth
+      myP.getTotalAccBits(),
+      myP.mrp.dataWidth
     )
   ).io
   // instantiate request generator
