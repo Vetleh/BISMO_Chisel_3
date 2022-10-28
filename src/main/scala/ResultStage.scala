@@ -79,6 +79,7 @@ class ResultStageDRAMIO(myP: ResultStageParams) extends Bundle {
 
 }
 
+
 class ResultStage(val myP: ResultStageParams) extends Module {
   val io = IO(new Bundle {
     // base control signals
@@ -123,10 +124,15 @@ class ResultStage(val myP: ResultStageParams) extends Module {
     i <- 0 until myP.dpa_lhs
   } yield io.resmem_rsp(i)(j).readData
   val allacc = Cat(accseq.reverse)
-  ds.in.TDATA := allacc
+  ds.in.bits := allacc
   // downsizer input valid controlled by FSM
-  ds.in.TVALID := false.B
-  FPGAQueue(Decoupled(ds.out), 256) <> io.dram.wr_dat
+  ds.in.valid := false.B
+
+  // TODO this cannot be optimal, look into how to do this
+  val tempDecoupeled = Wire(Decoupled(chiselTypeOf(ds.out.bits)))
+  tempDecoupeled <> ds.out
+
+  FPGAQueue(tempDecoupeled, 256) <> io.dram.wr_dat
 
   // wire up request generator
   rg.in.valid := false.B
@@ -160,13 +166,13 @@ class ResultStage(val myP: ResultStageParams) extends Module {
         when(io.csr.waitComplete) {
           regState := sWaitComplete
         }.otherwise {
-          ds.in.TVALID := true.B
+          ds.in.valid := true.B
           rg.in.valid := true.B
-          when(ds.in.TREADY & !rg.in.ready) {
+          when(ds.in.ready & !rg.in.ready) {
             regState := sWaitRG
-          }.elsewhen(!ds.in.TREADY & rg.in.ready) {
+          }.elsewhen(!ds.in.ready & rg.in.ready) {
             regState := sWaitDS
-          }.elsewhen(ds.in.TREADY & rg.in.ready) {
+          }.elsewhen(ds.in.ready & rg.in.ready) {
             regState := sFinished
           }
         }
@@ -175,8 +181,8 @@ class ResultStage(val myP: ResultStageParams) extends Module {
 
     is(sWaitDS) {
       // downsizer is busy but request generator is done
-      ds.in.TVALID := true.B
-      when(ds.in.TREADY) { regState := sFinished }
+      ds.in.valid := true.B
+      when(ds.in.ready) { regState := sFinished }
     }
 
     is(sWaitRG) {
