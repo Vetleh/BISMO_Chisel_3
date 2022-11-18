@@ -6,6 +6,7 @@ import chisel3.stage.ChiselStage
 import sys.process._
 import fpgatidbits.PlatformWrapper._
 import fpgatidbits.TidbitsMakeUtils
+import java.nio.file.Paths
 
 // Main entry points into the different functionalities provided by this repo.
 // There are four different entry points:
@@ -32,6 +33,20 @@ object Settings {
   def makeInstFxn(myP: BitSerialMatMulParams): AccelInstFxn = {
     return {(p: PlatformWrapperParams) => new BitSerialMatMulAccel(myP, p)}
   }
+
+  def writeVerilogToFile(verilog: String, path: String) = {
+      import java.io._
+      val fname = path
+      val f = new File(fname)
+      if (!f.exists()) {
+        f.getParentFile.mkdirs
+        f.createNewFile()
+      }
+      val writer = new PrintWriter(f)
+      writer.write(verilog)
+      writer.close()
+
+    }
 
   // accelerator emu settings
   var emuConfigParams =  new BitSerialMatMulParams(
@@ -69,11 +84,45 @@ object ChiselMain {
         mrp = PYNQZ1Params.toMemReqParams()
       )
     )
-    val platformInst = TidbitsMakeUtils.platformMap(platformName)
 
-    val chiselArgs = Array("v", "--target-dir", targetDir)
-    (new ChiselStage).emitVerilog(platformInst(accInst, ""), chiselArgs)
+    val platformInst = {f: (PlatformWrapperParams => GenericAccelerator) => new VerilatedTesterWrapper(f, targetDir)}
+    // val accInst = {p: PlatformWrapperParams => new VaddStreamReactor(p,5) }
+
+    val verilogString = (new chisel3.stage.ChiselStage).emitVerilog(platformInst(accInst))
+    Settings.writeVerilogToFile(verilogString, targetDir + "/TesterWrapper.v")
+    // val resRoot = Paths.get("src/main/resources").toAbsolutePath.toString
+    // val resTestRoot = resRoot + "/TestVaddReactor"
+    // fpgatidbits.TidbitsMakeUtils.fileCopy(resRoot + "/Makefile", targetDir)
+    // fpgatidbits.TidbitsMakeUtils.fileCopy(resTestRoot + "/main.cpp", targetDir)
+    // val platformInst = TidbitsMakeUtils.platformMap(platformName)
+
+    // val chiselArgs = Array("v")
+    // (new ChiselStage).emitVerilog(platformInst(accInst, "out_verilog/"), chiselArgs)
     // (new ChiselStage).execute(chiselArgs, firrtl.AnnotationSeq(() => Module(platformInst(accInst, ""))))
     // chiselMain(chiselArgs, () => Module(platformInst(accInst)))
+  }
+}
+
+
+// call this object's main method to generate a C++ static library containing
+// the cycle-accurate emulation model for the chosen accelerator. the interface
+// of the model is compatible with  the fpgatidbits.PlatformWrapper hw/sw
+// interface.
+object EmuLibMain {
+  def main(args: Array[String]): Unit = {
+    val emuName: String = args(0)
+    val emuDir: String = args(1)
+    if (args.size > 2) {
+        val dpaDimLHS: Int = args(2).toInt
+        val dpaDimCommon: Int = args(3).toInt
+        val dpaDimRHS: Int = args(4).toInt
+
+        Settings.emuConfigParams = new BitSerialMatMulParams(
+           dpaDimLHS = dpaDimLHS, dpaDimRHS = dpaDimRHS, dpaDimCommon = dpaDimCommon,
+           lhsEntriesPerMem = 128, rhsEntriesPerMem = 128, mrp = PYNQZ1Params.toMemReqParams()
+        )
+    }
+    val accInst: Settings.AccelInstFxn = Settings.emuMap(emuName)
+    TidbitsMakeUtils.makeVerilator(accInst, emuDir)
   }
 }

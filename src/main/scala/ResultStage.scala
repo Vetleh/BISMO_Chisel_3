@@ -76,9 +76,7 @@ class ResultStageDRAMIO(myP: ResultStageParams) extends Bundle {
   val wr_req = Decoupled(new GenericMemoryRequest(myP.mrp))
   val wr_dat = Decoupled(UInt(myP.mrp.dataWidth.W))
   val wr_rsp = Flipped(Decoupled(new GenericMemoryResponse(myP.mrp)))
-
 }
-
 
 class ResultStage(val myP: ResultStageParams) extends Module {
   val io = IO(new Bundle {
@@ -88,8 +86,15 @@ class ResultStage(val myP: ResultStageParams) extends Module {
     val csr = Input(new ResultStageCtrlIO(myP))
     val dram = new ResultStageDRAMIO(myP)
     // interface towards result memory
-    val resmem_req = Vec(myP.dpa_lhs, Vec(myP.dpa_rhs, Output(new OCMRequest(myP.accWidth, log2Up(myP.resEntriesPerMem)))))
-    val resmem_rsp = Vec(myP.dpa_lhs, Vec(myP.dpa_rhs, Input(new OCMResponse(myP.accWidth))))
+    val resmem_req = Vec(
+      myP.dpa_lhs,
+      Vec(
+        myP.dpa_rhs,
+        Output(new OCMRequest(myP.accWidth, log2Up(myP.resEntriesPerMem)))
+      )
+    )
+    val resmem_rsp =
+      Vec(myP.dpa_lhs, Vec(myP.dpa_rhs, Input(new OCMResponse(myP.accWidth))))
   })
   // TODO add burst support, single beat for now
   val bytesPerBeat: Int = myP.mrp.dataWidth / 8
@@ -116,6 +121,8 @@ class ResultStage(val myP: ResultStageParams) extends Module {
   } {
     io.resmem_req(i)(j).addr := io.csr.resmem_addr
     io.resmem_req(i)(j).writeEn := false.B
+    // TODO Should not be needed, something with VecInit.fill instead maybe?
+    io.resmem_req(i)(j).writeData := 0.U
   }
 
   // wire up downsizer
@@ -129,10 +136,13 @@ class ResultStage(val myP: ResultStageParams) extends Module {
   ds.in.valid := false.B
 
   // TODO this cannot be optimal, look into how to do this
-  val tempDecoupeled = Wire(Decoupled(chiselTypeOf(ds.out.bits)))
+  val tempDecoupeled = Wire(Flipped(Decoupled(chiselTypeOf(ds.out.bits))))
   tempDecoupeled <> ds.out
 
-  FPGAQueue(tempDecoupeled, 256) <> io.dram.wr_dat
+  FPGAQueue(
+    tempDecoupeled,
+    256
+  ) <> io.dram.wr_dat
 
   // wire up request generator
   rg.in.valid := false.B
@@ -202,8 +212,8 @@ class ResultStage(val myP: ResultStageParams) extends Module {
   }
   // debug:
   // uncomment to print issued write requests and data in emulation
-  // PrintableBundleStreamMonitor(io.dram.wr_req, Bool(true), "wr_req", true)
-  /*when(io.dram.wr_dat.fire()) {
-    printf("Write data: %x\n", io.dram.wr_dat.bits)
-  }*/
+  // PrintableBundleStreamMonitor(io.dram.wr_req, true.B, "wr_req", true)
+  // when(io.dram.wr_dat.fire) {
+  //   printf("Write data: %x\n", io.dram.wr_dat.bits)
+  // }
 }

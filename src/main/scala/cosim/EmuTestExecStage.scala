@@ -102,6 +102,8 @@ class EmuTestExecStage(p: PlatformWrapperParams) extends GenericAccelerator(p) {
     resmem(m)(n).ports(0).req := rmm.res.req(m)(n)
     resmem(m)(n).ports(1).req.addr := io.resmem_addr_e
     resmem(m)(n).ports(1).req.writeEn := false.B
+    // TODOv2 find out why this is needed
+    resmem(m)(n).ports(1).req.writeData := 0.U
     // resultStage.resmem_rsp(m)(n) := resmem(m)(n).ports(1).rsp
   }
 

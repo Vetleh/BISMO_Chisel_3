@@ -163,6 +163,8 @@ class ExecStage(val myP: ExecStageParams) extends Module {
   for (i <- 0 to myP.getM() - 1) {
     io.tilemem.lhs_req(i).addr := seqgen.seq.bits + (io.csr.lhsOffset)
     io.tilemem.lhs_req(i).writeEn := false.B
+    // TODOv2 this line wasent needed in original
+    io.tilemem.lhs_req(i).writeData := 0.U
     dpa.a(i) := io.tilemem.lhs_rsp(i).readData
     // printf("Read data from BRAM %d = %x\n", UInt(i), io.tilemem.lhs_rsp(i).readData)
     /*when(seqgen.seq.valid) {
@@ -173,6 +175,8 @@ class ExecStage(val myP: ExecStageParams) extends Module {
   for (i <- 0 to myP.getN() - 1) {
     io.tilemem.rhs_req(i).addr := seqgen.seq.bits + (io.csr.rhsOffset)
     io.tilemem.rhs_req(i).writeEn := false.B
+    // TODOv2 this line wasent needed in the original
+    io.tilemem.rhs_req(i).writeData := 0.U
     dpa.b(i) := io.tilemem.rhs_rsp(i).readData
     /*when(seqgen.seq.valid) {
       printf("RHS BRAM %d read addr %d\n", UInt(i), io.tilemem.rhs_req(i).addr)

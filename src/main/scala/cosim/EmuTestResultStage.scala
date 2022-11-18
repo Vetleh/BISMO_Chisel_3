@@ -8,39 +8,53 @@ import fpgatidbits.streams._
 import fpgatidbits.PlatformWrapper._
 
 class EmuTestResultStage(
-  accArrayDim: Int, p: PlatformWrapperParams
+    accArrayDim: Int,
+    p: PlatformWrapperParams
 ) extends GenericAccelerator(p) {
   val numMemPorts = 1
   // parameters for accelerator instance
   val myP = new ResultStageParams(
-    accWidth = 32, resMemReadLatency = 0,
-    dpa_rhs = accArrayDim, dpa_lhs = accArrayDim, mrp = PYNQZ1Params.toMemReqParams()
+    accWidth = 32,
+    resMemReadLatency = 0,
+    dpa_rhs = accArrayDim,
+    dpa_lhs = accArrayDim,
+    mrp = PYNQZ1Params.toMemReqParams()
   )
 
   class EmuTestResultStageIO() extends GenericAcceleratorIF(numMemPorts, p) {
-      // base control signals
-      val start = Input(Bool())                   // hold high while running
-      val done = Output(Bool())                   // high when done until start=0
-      val csr = Input(new ResultStageCtrlIO(myP))
-      val accwr_en = Input(Bool())
-      val accwr_lhs = Input(UInt(log2Up(myP.dpa_lhs).W))
-      val accwr_rhs = Input(UInt(log2Up(myP.dpa_rhs).W))
-      val accwr_data = Input(UInt(myP.accWidth.W))
-    }
+    // base control signals
+    val start = Input(Bool()) // hold high while running
+    val done = Output(Bool()) // high when done until start=0
+    val csr = Input(new ResultStageCtrlIO(myP))
+    val accwr_en = Input(Bool())
+    val accwr_lhs = Input(UInt(log2Up(myP.dpa_lhs).W))
+    val accwr_rhs = Input(UInt(log2Up(myP.dpa_rhs).W))
+    val accwr_data = Input(UInt(myP.accWidth.W))
+  }
 
   val io = IO(new EmuTestResultStageIO())
-  
-  val resmem = VecInit.fill(myP.dpa_lhs) { VecInit.fill(myP.dpa_rhs) {
-    Module(new PipelinedDualPortBRAM(
-      addrBits = 1, dataBits = myP.accWidth, regIn = 0, regOut = 0
-    )).io
-  }}
+
+  val resmem = VecInit.fill(myP.dpa_lhs) {
+    VecInit.fill(myP.dpa_rhs) {
+      Module(
+        new PipelinedDualPortBRAM(
+          addrBits = 1,
+          dataBits = myP.accWidth,
+          regIn = 0,
+          regOut = 0
+        )
+      ).io
+    }
+  }
+  // printf("accwr_lhs: %x \n", io.accwr_lhs)
+  // printf("accwr_rhs: %x \n", io.accwr_rhs)
+  // printf("accwr_rhs: %x \n", io.accwr_data)
   val res = Module(new ResultStage(myP)).io
   res.start := io.start
   io.done := res.done
   res.csr <> io.csr
-  for(lhs <- 0 until myP.dpa_lhs) {
-    for(rhs <- 0 until myP.dpa_rhs) {
+  for (lhs <- 0 until myP.dpa_lhs) {
+    for (rhs <- 0 until myP.dpa_rhs) {
       // drive defaults on resmem req port 0
       val is_my_lhs = (lhs.U === io.accwr_lhs)
       val is_my_rhs = (rhs.U === io.accwr_rhs)
@@ -54,11 +68,14 @@ class EmuTestResultStage(
       resmem(lhs)(rhs).ports(1).rsp <> res.resmem_rsp(lhs)(rhs)
     }
   }
-
   // connect DRAM interface for ResultStage
   res.dram.wr_req <> io.memPort(0).memWrReq
   res.dram.wr_dat <> io.memPort(0).memWrDat
   io.memPort(0).memWrRsp <> res.dram.wr_rsp
+  // when(io.memPort(0).memWrDat.bits =/= 0.U) {
+  //   printf("bits: %x \n", io.memPort(0).memWrDat.bits)
+  // }
+
   // plug unused read port
   plugMemReadPort(0)
   // the signature can be e.g. used for checking that the accelerator has the
