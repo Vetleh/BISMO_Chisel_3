@@ -27,6 +27,6 @@ lazy val root = (project in file("."))
     )
   )
 // add fpga-tidbits as unmanaged source dependency, pulled as git submodule
-unmanagedSourceDirectories in Compile += baseDirectory.value / "fpga-tidbits" / "src" / "main" / "scala"
+Compile / unmanagedSourceDirectories += baseDirectory.value / "fpga-tidbits" / "src" / "main" / "scala"
 // fpga-tidbits stores compile scripts, drivers etc. in the resource dir
-unmanagedResourceDirectories in Compile += baseDirectory.value / "fpga-tidbits" / "src" / "main" / "resources"
+Compile / unmanagedResourceDirectories += baseDirectory.value / "fpga-tidbits" / "src" / "main" / "resources"
