@@ -26,6 +26,7 @@ lazy val root = (project in file("."))
       "edu.berkeley.cs" % "chisel3-plugin" % chiselVersion cross CrossVersion.full
     )
   )
+
 // add fpga-tidbits as unmanaged source dependency, pulled as git submodule
 Compile / unmanagedSourceDirectories += baseDirectory.value / "fpga-tidbits" / "src" / "main" / "scala"
 // fpga-tidbits stores compile scripts, drivers etc. in the resource dir
