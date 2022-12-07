@@ -25,8 +25,12 @@ jobs:
         run: sudo apt-get install verilator
       - name: Cache Scala
         uses: coursier/cache-action@v5
-      - name: Cosimulation
-        run: make EmuTestResultStage 
-      - name: SBT Test
+      - name: Cosimulation - fetchstage test
+        run: make EmuTestFetchStage 
+      - name: Cosimulation - executestage test
+        run: make EmuTestExecuteStage 
+      - name: Cosimulation - resultstage test
+        run: make EmuTestResultStage
+      - name: SBT Tests
         run: sbt test
       
