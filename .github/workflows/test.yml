@@ -24,4 +24,4 @@ jobs:
       - name: Cache Scala
         uses: coursier/cache-action@v5
       - name: SBT Test
-        run: sbt "testOnly bismo.TestMultiSeqGen"
+        run: sbt test
