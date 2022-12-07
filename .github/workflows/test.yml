@@ -23,5 +23,8 @@ jobs:
           mill-version: 0.9.7
       - name: Cache Scala
         uses: coursier/cache-action@v5
+      - name: Cosimulation
+        run: make EmuTestResultStage 
       - name: SBT Test
         run: sbt test
+      
