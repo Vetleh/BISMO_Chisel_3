@@ -22,7 +22,7 @@ jobs:
         with:
           mill-version: 0.9.7
       - name: setup Verilator
-        run: apt-get install verilator
+        run: sudo apt-get install verilator
       - name: Cache Scala
         uses: coursier/cache-action@v5
       - name: Cosimulation
