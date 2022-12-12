@@ -31,6 +31,6 @@ jobs:
         run: make EmuTestExecStage 
       - name: Cosimulation - resultstage test
         run: make EmuTestResultStage
-      - name: SBT Tests
-        run: sbt test
+#      - name: SBT Tests
+#        run: sbt test
       
