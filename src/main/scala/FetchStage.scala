@@ -152,12 +152,9 @@ class FetchStageCtrlIO(myP: FetchStageParams) extends PrintableBundle {
 
 // fetch stage IO: BRAM writes
 class FetchStageBRAMIO(myP: FetchStageParams) extends Bundle {
-  val lhs_req = VecInit.fill(myP.numLHSMems) {
-    Output(new OCMRequest(myP.mrp.dataWidth, myP.numAddrBits))
-  }
-  val rhs_req = VecInit.fill(myP.numRHSMems) {
-    Output(new OCMRequest(myP.mrp.dataWidth, myP.numAddrBits))
-  }
+  val lhs_req = Vec(myP.numLHSMems, Output(new OCMRequest(myP.mrp.dataWidth, myP.numAddrBits)))
+  val rhs_req = Vec(myP.numRHSMems, Output(new OCMRequest(myP.mrp.dataWidth, myP.numAddrBits))) 
+    
 
 }
 
@@ -169,7 +166,7 @@ class FetchStageDRAMIO(myP: FetchStageParams) extends Bundle {
 }
 
 class FetchRouteGen(myP: FetchStageParams) extends Module {
-  val io = new Bundle {
+  val io = IO(new Bundle {
     // controls =============================================
     // prepare for new sequence (re-initialize internal state)
     val init_new = Input(Bool())
@@ -184,7 +181,7 @@ class FetchRouteGen(myP: FetchStageParams) extends Module {
     // stream I/O ==========================================
     val in = Flipped(Decoupled(Bits(myP.mrp.dataWidth.W)))
     val out = Decoupled(new FetchStagePacket(myP))
-  }
+  })
   // registers for values controlling sequence generation
   val regTilesPerRow = RegInit(0.U(16.W))
   val regTilesPerRowMinusOne = RegInit(0.U(16.W))

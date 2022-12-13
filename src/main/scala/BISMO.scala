@@ -14,7 +14,7 @@ import fpgatidbits.streams._
 
 // make the instantiated config options available to softare at runtime
 class BitSerialMatMulHWCfg(bitsPerField: Int) extends Bundle {
-  val readChanWidth = UInt(bitsPerField.W)
+  val readChanWidth =UInt(bitsPerField.W)
   val writeChanWidth = UInt(bitsPerField.W)
   val dpaDimLHS = UInt(bitsPerField.W)
   val dpaDimRHS = UInt(bitsPerField.W)
@@ -84,7 +84,7 @@ class BitSerialMatMulParams(
   }
 
   def asHWCfgBundle(bitsPerField: Int): BitSerialMatMulHWCfg = {
-    val ret = new BitSerialMatMulHWCfg(bitsPerField)
+    val ret = Wire(new BitSerialMatMulHWCfg(bitsPerField))
     ret.readChanWidth := mrp.dataWidth.U
     ret.writeChanWidth := mrp.dataWidth.U
     ret.dpaDimLHS := dpaDimLHS.U
@@ -153,14 +153,23 @@ class BitSerialMatMulPerf(myP: BitSerialMatMulParams) extends Bundle {
   val prf_fetch = new Bundle {
     val count = Output(UInt(32.W))
     val sel = Input(UInt(log2Up(4).W))
+    // TODO These not needed, fix later
+    val probe = Input(UInt(32.W))
+    val start = Input(Bool())
   }
   val prf_exec = new Bundle {
     val count = Output(UInt(32.W))
     val sel = Input(UInt(log2Up(4).W))
+    // TODO These not needed, fix later
+    val probe = Input(UInt(32.W))
+    val start = Input(Bool())
   }
   val prf_res = new Bundle {
     val count = Output(UInt(32.W))
     val sel = Input(UInt(log2Up(4).W))
+    // TODO These not needed, fix later
+    val probe = Input(UInt(32.W))
+    val start = Input(Bool())
   }
 
 }
@@ -217,19 +226,19 @@ class BitSerialMatMulAccel(
   val execCtrl = Module(new ExecController(myP.execStageParams)).io
   val resultCtrl = Module(new ResultController(myP.resultStageParams)).io
   // instantiate op and runcfg queues
-  val fetchOpQ = Module(new FPGAQueue(io.fetch_op.bits, myP.cmdQueueEntries)).io
-  val execOpQ = Module(new FPGAQueue(io.exec_op.bits, myP.cmdQueueEntries)).io
+  val fetchOpQ = Module(new FPGAQueue(chiselTypeOf(io.fetch_op.bits), myP.cmdQueueEntries)).io
+  val execOpQ = Module(new FPGAQueue(chiselTypeOf(io.exec_op.bits), myP.cmdQueueEntries)).io
   val resultOpQ = Module(
-    new FPGAQueue(io.result_op.bits, myP.cmdQueueEntries)
+    new FPGAQueue(chiselTypeOf(io.result_op.bits), myP.cmdQueueEntries)
   ).io
   val fetchRunCfgQ = Module(
-    new FPGAQueue(io.fetch_runcfg.bits, myP.cmdQueueEntries)
+    new FPGAQueue(chiselTypeOf(io.fetch_runcfg.bits), myP.cmdQueueEntries)
   ).io
   val execRunCfgQ = Module(
-    new FPGAQueue(io.exec_runcfg.bits, myP.cmdQueueEntries)
+    new FPGAQueue(chiselTypeOf(io.exec_runcfg.bits), myP.cmdQueueEntries)
   ).io
   val resultRunCfgQ = Module(
-    new FPGAQueue(io.result_runcfg.bits, myP.cmdQueueEntries)
+    new FPGAQueue(chiselTypeOf(io.result_runcfg.bits), myP.cmdQueueEntries)
   ).io
   // instantiate tile memories
   val tilemem_lhs = VecInit.fill(myP.dpaDimLHS) {
@@ -276,6 +285,7 @@ class BitSerialMatMulAccel(
       )
     ).io
   }
+  
 
   // instantiate synchronization token FIFOs
   val syncFetchExec_free = Module(new FPGAQueue(Bool(), 8)).io

@@ -47,13 +47,15 @@ class BaseController[Ts <: Bundle](
     // output to stage (config for current run)
     val stageO = Output(genStageO)
     // synchronization channels
-    val sync_in = VecInit.fill(inChannels) { Flipped(Decoupled(Bool())) }
-    val sync_out = VecInit.fill(outChannels) { Decoupled(Bool()) }
+    val sync_in = Vec(inChannels, Flipped(Decoupled(Bool())))
+    val sync_out = Vec(outChannels, Decoupled(Bool()))
     // state profiler output
     val perf = new Bundle {
       val start = Input(Bool())
+      val probe = Input(UInt(32.W))
       val count = Output(UInt(32.W))
       val sel = Input(UInt(log2Up(4).W))
+      
     }
   })
   // default values

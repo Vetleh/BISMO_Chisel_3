@@ -115,35 +115,16 @@ class ExecStageCtrlIO(myP: ExecStageParams) extends PrintableBundle {
 
 // interface towards tile memories (LHS/RHS BRAMs)
 class ExecStageTileMemIO(myP: ExecStageParams) extends Bundle {
-  val lhs_req = Output(VecInit.fill(myP.getM()) {
-    new OCMRequest(
-      myP.getK(),
-      log2Up(myP.lhsTileMem * myP.tileMemAddrUnit)
-    )
-  })
-  val lhs_rsp = Input(VecInit.fill(myP.getM()) {
-    new OCMResponse(myP.getK())
-  })
-  val rhs_req = Output(VecInit.fill(myP.getN()) {
-    new OCMRequest(
-      myP.getK(),
-      log2Up(myP.rhsTileMem * myP.tileMemAddrUnit)
-    )
-  })
-  val rhs_rsp = Input(VecInit.fill(myP.getN()) {
-    new OCMResponse(myP.getK())
-  })
+  val lhs_req = Vec(myP.getM(), Output(new OCMRequest(myP.getK(),log2Up(myP.lhsTileMem * myP.tileMemAddrUnit))))
+  val lhs_rsp = Vec(myP.getM(), Input(new OCMResponse(myP.getK())))
+  val rhs_req = Vec(myP.getN(), Output(new OCMRequest(myP.getK(),log2Up(myP.rhsTileMem * myP.tileMemAddrUnit))))
+  val rhs_rsp = Vec(myP.getN(), Input(new OCMResponse(myP.getK())))
 
 }
 
 // interface towards result stage
 class ExecStageResMemIO(myP: ExecStageParams) extends Bundle {
-  val req = Output(VecInit.fill(myP.getM(), myP.getN()) {
-    new OCMRequest(
-      myP.getResBitWidth(),
-      log2Up(myP.resEntriesPerMem)
-    )
-  })
+  val req = Vec(myP.getM(), Vec(myP.getN(), Output(new OCMRequest(myP.getResBitWidth(), log2Up(myP.resEntriesPerMem)))))
 }
 
 class ExecStage(val myP: ExecStageParams) extends Module {
@@ -182,6 +163,8 @@ class ExecStage(val myP: ExecStageParams) extends Module {
   for (i <- 0 to myP.getM() - 1) {
     io.tilemem.lhs_req(i).addr := seqgen.seq.bits + (io.csr.lhsOffset)
     io.tilemem.lhs_req(i).writeEn := false.B
+    // TODOv2 this line wasent needed in original
+    io.tilemem.lhs_req(i).writeData := 0.U
     dpa.a(i) := io.tilemem.lhs_rsp(i).readData
     // printf("Read data from BRAM %d = %x\n", UInt(i), io.tilemem.lhs_rsp(i).readData)
     /*when(seqgen.seq.valid) {
@@ -192,6 +175,8 @@ class ExecStage(val myP: ExecStageParams) extends Module {
   for (i <- 0 to myP.getN() - 1) {
     io.tilemem.rhs_req(i).addr := seqgen.seq.bits + (io.csr.rhsOffset)
     io.tilemem.rhs_req(i).writeEn := false.B
+    // TODOv2 this line wasent needed in the original
+    io.tilemem.rhs_req(i).writeData := 0.U
     dpa.b(i) := io.tilemem.rhs_rsp(i).readData
     /*when(seqgen.seq.valid) {
       printf("RHS BRAM %d read addr %d\n", UInt(i), io.tilemem.rhs_req(i).addr)
@@ -226,7 +211,7 @@ class ExecStage(val myP: ExecStageParams) extends Module {
     i <- 0 until myP.getM()
     j <- 0 until myP.getN()
   } {
-    io.res.req(i)(j).writeData := dpa.out(i)(j)
+    io.res.req(i)(j).writeData := dpa.out(i)(j).asUInt
     io.res.req(i)(j).addr := io.csr.writeAddr
     io.res.req(i)(j).writeEn := do_write_pulse
   }
