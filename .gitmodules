@@ -1,3 +1,6 @@
 [submodule "fpga-tidbits"]
 	path = fpga-tidbits
 	url = git@github.com:Vetleh/fpga-tidbits.git
+[submodule "src/main/cpp/app/gemmbitserial"]
+	path = src/main/cpp/app/gemmbitserial
+	url = https://github.com/maltanar/gemmbitserial.git

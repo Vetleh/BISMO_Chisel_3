@@ -52,7 +52,6 @@ class BaseController[Ts <: Bundle](
     // state profiler output
     val perf = new Bundle {
       val start = Input(Bool())
-      val probe = Input(UInt(32.W))
       val count = Output(UInt(32.W))
       val sel = Input(UInt(log2Up(4).W))
       
@@ -124,7 +123,8 @@ class BaseController[Ts <: Bundle](
 
   // state profiler
   val profiler = Module(new StateProfiler(4)).io
-  profiler <> io.perf
+  io.perf.count := profiler.count
+  profiler.sel := io.perf.sel
   profiler.start := io.perf.start & io.enable
   profiler.probe := regState
 }

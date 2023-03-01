@@ -153,23 +153,14 @@ class BitSerialMatMulPerf(myP: BitSerialMatMulParams) extends Bundle {
   val prf_fetch = new Bundle {
     val count = Output(UInt(32.W))
     val sel = Input(UInt(log2Up(4).W))
-    // TODO These not needed, fix later
-    val probe = Input(UInt(32.W))
-    val start = Input(Bool())
   }
   val prf_exec = new Bundle {
     val count = Output(UInt(32.W))
-    val sel = Input(UInt(log2Up(4).W))
-    // TODO These not needed, fix later
-    val probe = Input(UInt(32.W))
-    val start = Input(Bool())
+    val sel = Input(UInt(2.W))
   }
   val prf_res = new Bundle {
     val count = Output(UInt(32.W))
     val sel = Input(UInt(log2Up(4).W))
-    // TODO These not needed, fix later
-    val probe = Input(UInt(32.W))
-    val start = Input(Bool())
   }
 
 }
@@ -399,9 +390,15 @@ class BitSerialMatMulAccel(
   fetchCtrl.perf.start := io.perf.cc_enable
   execCtrl.perf.start := io.perf.cc_enable
   resultCtrl.perf.start := io.perf.cc_enable
-  io.perf.prf_fetch <> fetchCtrl.perf
-  io.perf.prf_exec <> execCtrl.perf
-  io.perf.prf_res <> resultCtrl.perf
+
+  io.perf.prf_fetch.count := fetchCtrl.perf.count
+  fetchCtrl.perf.sel := io.perf.prf_fetch.sel 
+
+  io.perf.prf_exec.count := execCtrl.perf.count
+  execCtrl.perf.sel := io.perf.prf_exec.sel
+
+  io.perf.prf_res.count := resultCtrl.perf.count 
+  resultCtrl.perf.sel := io.perf.prf_res.sel
 
   /* TODO expose the useful ports from the monitors below:
   StreamMonitor(syncFetchExec_free.enq, io.perf.cc_enable)
