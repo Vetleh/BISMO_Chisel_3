@@ -8,9 +8,9 @@ CC = g++
 PLATFORM ?= VerilatedTester
 URI = $($(PLATFORM)_URI)
 # overlay dims
-M ?= 8
-K ?= 256
-N ?= 8
+M ?= 2
+K ?= 128
+N ?= 2
 OVERLAY_CFG = $(M)x$(K)x$(N)
 
 TOP ?= $(shell dirname $(realpath $(filter %Makefile, $(MAKEFILE_LIST))))
@@ -28,6 +28,8 @@ BUILD_DIR_VERILOG := $(BUILD_PATH)/hw/verilog
 HW_VERILOG := $(BUILD_DIR_VERILOG)/$(PLATFORM)Wrapper.v 
 
 CPPTEST_SRC_DIR := $(TOP)/src/test/cosim
+
+APP_SRC_DIR := $(TOP)/src/main/cpp/app
 
 
 # BISMO is run in emulation mode by default if no target is provided
@@ -55,9 +57,12 @@ EmuTest%:
 	cp -r $(CPPTEST_SRC_DIR)/$@.cpp $(BUILD_DIR)/$@
 	cd $(BUILD_DIR)/$@; ./verilator-build.sh; ./VerilatedTesterWrapper
 
-emu: $(TOP)/build/smallEmu/driver.a
+emu:
+	mkdir -p $(BUILD_DIR)/smallEmu
+	$(SBT) $(SBT_FLAGS) "runMain bismo.EmuLibMain main $(BUILD_DIR)/smallEmu"
 	cp -r $(APP_SRC_DIR)/* $(TOP)/build/smallEmu/
-	cd $(TOP)/build/smallEmu; g++ -std=c++11 *.cpp driver.a -o emu; ./emu
+	cp $(TOP)/verilator/BitSerialMatMulAccel.hpp $(BUILD_DIR)/smallEmu
+	cd $(BUILD_DIR)/smallEmu; ./verilator-build.sh; ./VerilatedTesterWrapper
 
 # remove everything that is built
 clean:
