@@ -606,7 +606,7 @@ protected:
     //Binary matrix
     assert(lhs.nbits == 1 && rhs.nbits == 1);
 
-    /*lhs.printSummary();
+    lhs.printSummary();
     rhs.printSummary();
     lhs.printHex();
     rhs.printHex();
@@ -629,7 +629,7 @@ protected:
     cout << "rhs_bytes_per_l2	" <<	rhs_bytes_per_l2	<< endl;
     cout << "z_l2_per_matrix " << z_l2_per_matrix << endl;
     cout << "lhs_l2_per_matrix	" <<	lhs_l2_per_matrix	<< endl;
-    cout << "rhs_l2_per_matrix	" <<	rhs_l2_per_matrix	<< endl;*/
+    cout << "rhs_l2_per_matrix	" <<	rhs_l2_per_matrix	<< endl;
 
     const uint64_t fetch_base_lhs = (uint64_t) m_accelLHS;
     const uint64_t fetch_base_rhs = (uint64_t) m_accelRHS;
