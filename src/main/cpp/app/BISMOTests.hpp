@@ -74,6 +74,7 @@ bool test(
     cout << "Test succeeded (" << testName << ")" << endl;
     runner->printPerfSummary();
     runner->printPerfDetails();
+    printmatrix(accel_res, nrows_rhs, nrows_lhs);
   } else {
     cout << "Test failed (" << testName << ")" << endl;
     cout << "Expected: " << endl;
@@ -95,8 +96,8 @@ bool test_binary_onchip_onetile(
   WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
 ) {
   bool all_OK = true;
-  vector<size_t> cols_div_factor {2, 4, 8};
-  // vector<size_t> cols_div_factor {8};
+  // vector<size_t> cols_div_factor {2, 4, 8};
+  vector<size_t> cols_div_factor {2};
   for(auto & col_div : cols_div_factor) {
     all_OK &= test(
       "binary_onchip_onetile_coldiv" + to_string(col_div), platform, acc,

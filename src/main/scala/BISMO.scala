@@ -24,7 +24,17 @@ class BitSerialMatMulHWCfg(bitsPerField: Int) extends Bundle {
   val accWidth = UInt(bitsPerField.W)
   val maxShiftSteps = UInt(bitsPerField.W)
   val cmdQueueEntries = UInt(bitsPerField.W)
+}
 
+class IntructionGenerationIterations() extends Bundle {
+  val lhs_l1_per_l2 = UInt(32.W)
+  val rhs_l1_per_l2 = UInt(32.W)
+
+  val lhs_l2_per_matrix = UInt(32.W)
+  val rhs_l2_per_matrix = UInt(32.W)
+  val z_l2_per_matrix = UInt(32.W)
+  // TODO move this
+  val n_rows = UInt(32.W)
 }
 
 // parameters that control the accelerator instantiation
@@ -177,6 +187,7 @@ class BitSerialMatMulAccel(
     val fetch_enable = Input(Bool())
     val exec_enable = Input(Bool())
     val result_enable = Input(Bool())
+
     // op queues
     val fetch_op = Flipped(Decoupled(new ControllerCmd(1, 1)))
     val exec_op = Flipped(Decoupled(new ControllerCmd(2, 2)))
@@ -184,7 +195,7 @@ class BitSerialMatMulAccel(
     // config for run ops
     val fetch_runcfg = Flipped(
       Decoupled(
-        new FetchStageCtrlIO(myP.fetchStageParams)
+        new FetchInstructionGeneratorIn()
       )
     )
     val exec_runcfg = Flipped(
@@ -192,7 +203,7 @@ class BitSerialMatMulAccel(
     )
     val result_runcfg = Flipped(
       Decoupled(
-        new ResultStageCtrlIO(myP.resultStageParams)
+        new ResultInstructionGeneratorIn()
       )
     )
     // command counts in each queue
@@ -208,28 +219,94 @@ class BitSerialMatMulAccel(
   val io = IO(new BitSerialMatMulAccelIO)
 
   io.hw := myP.asHWCfgBundle(32)
+  // Instantiate instruction generators
+  // TODO fix the variables these takes in
+  val fetchInstructionGenerator = Module(
+    new FetchInstructionGenerator(
+      myP.fetchStageParams,
+      myP.dpaDimCommon,
+      myP.dpaDimLHS,
+      myP.dpaDimRHS,
+      myP.lhsEntriesPerMem,
+      myP.rhsEntriesPerMem,
+      myP.fetchStageParams.mrp.dataWidth
+    )
+  )
+  // val execInstructionGenerator = Module(
+  //   new ExecInstructionGenerator(
+  //     myP.execStageParams,
+  //     myP.dpaDimCommon,
+  //     myP.fetchStageParams.mrp.dataWidth,
+  //     myP.lhsEntriesPerMem,
+  //     myP.rhsEntriesPerMem
+  //   )
+  // )
+
+  val resultInstructionGenerator = Module(
+    new ResultInstructionGenerator(
+      myP.resultStageParams,
+      myP.lhsEntriesPerMem,
+      myP.dpaDimCommon,
+      myP.dpaDimLHS,
+      myP.dpaDimRHS
+    )
+  )
+
+  // val fetchOpGenerator = Module(
+  //   new FetchOpGenerator()
+  // )
+
+  // val resultOpGenerator = Module(
+  //   new ResultOpGenerator()
+  // )
+
+  // Wire up generators
+  // fetchInstructionGenerator.io.in <> io.fetch_runcfg
+  // execInstructionGenerator.io.in <> io.exec_runcfg
+
+  // Wire up result instruction generator
+  fetchInstructionGenerator.io.in <> io.fetch_runcfg
+  resultInstructionGenerator.io.in <> io.result_runcfg
+
+  // resultOpGenerator.io.in <> io.result_op
+
+
   // instantiate accelerator stages
   val fetchStage = Module(new FetchStage(myP.fetchStageParams)).io
   val execStage = Module(new ExecStage(myP.execStageParams)).io
   val resultStage = Module(new ResultStage(myP.resultStageParams)).io
+
   // instantiate the controllers for each stage
   val fetchCtrl = Module(new FetchController(myP.fetchStageParams)).io
   val execCtrl = Module(new ExecController(myP.execStageParams)).io
   val resultCtrl = Module(new ResultController(myP.resultStageParams)).io
   // instantiate op and runcfg queues
-  val fetchOpQ = Module(new FPGAQueue(chiselTypeOf(io.fetch_op.bits), myP.cmdQueueEntries)).io
-  val execOpQ = Module(new FPGAQueue(chiselTypeOf(io.exec_op.bits), myP.cmdQueueEntries)).io
+  val fetchOpQ = Module(
+    new FPGAQueue(chiselTypeOf(io.fetch_op.bits), myP.cmdQueueEntries)
+  ).io
+  val execOpQ = Module(
+    new FPGAQueue(chiselTypeOf(io.exec_op.bits), myP.cmdQueueEntries)
+  ).io
   val resultOpQ = Module(
-    new FPGAQueue(chiselTypeOf(io.result_op.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(io.result_op.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   val fetchRunCfgQ = Module(
-    new FPGAQueue(chiselTypeOf(io.fetch_runcfg.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(fetchInstructionGenerator.io.out.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   val execRunCfgQ = Module(
     new FPGAQueue(chiselTypeOf(io.exec_runcfg.bits), myP.cmdQueueEntries)
   ).io
   val resultRunCfgQ = Module(
-    new FPGAQueue(chiselTypeOf(io.result_runcfg.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(resultInstructionGenerator.io.out.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   // instantiate tile memories
   val tilemem_lhs = VecInit.fill(myP.dpaDimLHS) {
@@ -276,7 +353,6 @@ class BitSerialMatMulAccel(
       )
     ).io
   }
-  
 
   // instantiate synchronization token FIFOs
   val syncFetchExec_free = Module(new FPGAQueue(Bool(), 8)).io
@@ -300,7 +376,7 @@ class BitSerialMatMulAccel(
   fetchOpQ.deq <> fetchCtrl.op
   fetchRunCfgQ.deq <> fetchCtrl.runcfg
   enqPulseGenFromValid(fetchOpQ.enq, io.fetch_op)
-  enqPulseGenFromValid(fetchRunCfgQ.enq, io.fetch_runcfg)
+  enqPulseGenFromValid(fetchRunCfgQ.enq, fetchInstructionGenerator.io.out)
 
   // wire-up: command queues and pulse generators for exec stage
   execCtrl.enable := io.exec_enable
@@ -316,7 +392,7 @@ class BitSerialMatMulAccel(
   resultOpQ.deq <> resultCtrl.op
   resultRunCfgQ.deq <> resultCtrl.runcfg
   enqPulseGenFromValid(resultOpQ.enq, io.result_op)
-  enqPulseGenFromValid(resultRunCfgQ.enq, io.result_runcfg)
+  enqPulseGenFromValid(resultRunCfgQ.enq, resultInstructionGenerator.io.out)
 
   // wire-up: fetch controller and stage
   fetchStage.start := fetchCtrl.start
@@ -392,12 +468,12 @@ class BitSerialMatMulAccel(
   resultCtrl.perf.start := io.perf.cc_enable
 
   io.perf.prf_fetch.count := fetchCtrl.perf.count
-  fetchCtrl.perf.sel := io.perf.prf_fetch.sel 
+  fetchCtrl.perf.sel := io.perf.prf_fetch.sel
 
   io.perf.prf_exec.count := execCtrl.perf.count
   execCtrl.perf.sel := io.perf.prf_exec.sel
 
-  io.perf.prf_res.count := resultCtrl.perf.count 
+  io.perf.prf_res.count := resultCtrl.perf.count
   resultCtrl.perf.sel := io.perf.prf_res.sel
 
   /* TODO expose the useful ports from the monitors below:

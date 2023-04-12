@@ -3,25 +3,27 @@ package bismo
 import chisel3._
 import chisel3.util._
 
+class ExecInstructionGeneratorIn(myP: ExecStageParams) extends Bundle {
+  val lhs_l1_per_l2 = UInt(32.W)
+  val rhs_l1_per_l2 = UInt(32.W)
+
+  val lhs_l2_per_matrix = UInt(32.W)
+  val rhs_l2_per_matrix = UInt(32.W)
+  val z_l2_per_matrix = UInt(32.W)
+
+  val numTiles = UInt(32.W) // num of L0 tiles to execute
+
+  // how much left shift to use
+  val shiftAmount =
+    UInt(log2Up(myP.dpaParams.dpuParams.maxShiftSteps + 1).W)
+
+  // negate during accumulation
+  val negate = Bool()
+}
+
 class ExecInstructionGeneratorIO(myP: ExecStageParams) extends Bundle {
-  val in = Flipped(Decoupled(new Bundle {
-    val lhs_l1_per_l2 = UInt(32.W)
-    val rhs_l1_per_l2 = UInt(32.W)
-
-    val lhs_l2_per_matrix = UInt(32.W)
-    val rhs_l2_per_matrix = UInt(32.W)
-    val z_l2_per_matrix = UInt(32.W)
-
-    val numTiles = UInt(32.W) // num of L0 tiles to execute
-
-    // how much left shift to use
-    val shiftAmount =
-      UInt(log2Up(myP.dpaParams.dpuParams.maxShiftSteps + 1).W)
-
-    // negate during accumulation
-    val negate = Bool()
-  }))
-  val out = Output(new ExecStageCtrlIO(myP))
+  val in = Flipped(Decoupled(new ExecInstructionGeneratorIn(myP)))
+  val out = Decoupled(new ExecStageCtrlIO(myP))
 }
 
 class ExecInstructionGenerator(
@@ -52,12 +54,15 @@ class ExecInstructionGenerator(
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.z_l2_per_matrix * io.in.bits.lhs_l1_per_l2 * io.in.bits.rhs_l1_per_l2
 
   io.in.ready := false.B
-  when(counter < total_iters && io.in.valid) {
-    io.out.lhsOffset := current_bram_region * lhs_l0_per_bram.U + lhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
-    io.out.rhsOffset := current_bram_region * rhs_l0_per_bram.U + rhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
-    io.out.clear_before_first_accumulation := Mux(z_l2 === 0.U, 1.U, 0.U)
-    io.out.writeEn := Mux(z_l2 === io.in.bits.z_l2_per_matrix - 1.U, 1.U, 0.U)
-    io.out.writeAddr := current_resmem_region
+  io.out.valid := false.B
+  
+  when(counter < total_iters && io.in.valid && io.out.ready) {
+    io.out.valid := true.B
+    io.out.bits.lhsOffset := current_bram_region * lhs_l0_per_bram.U + lhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
+    io.out.bits.rhsOffset := current_bram_region * rhs_l0_per_bram.U + rhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
+    io.out.bits.clear_before_first_accumulation := Mux(z_l2 === 0.U, 1.U, 0.U)
+    io.out.bits.writeEn := Mux(z_l2 === io.in.bits.z_l2_per_matrix - 1.U, 1.U, 0.U)
+    io.out.bits.writeAddr := current_resmem_region
     // Current result memory BRAM logic
     when(z_l2 === io.in.bits.z_l2_per_matrix - 1.U) {
       // Increment current BRAM region
@@ -89,16 +94,16 @@ class ExecInstructionGenerator(
     }
   }.otherwise {
     io.in.ready := true.B
-    io.out.lhsOffset := 0.U
-    io.out.rhsOffset := 0.U
-    io.out.writeAddr := 0.U
-    io.out.writeEn := 0.U
-    io.out.clear_before_first_accumulation := 0.U
+    io.out.bits.lhsOffset := 0.U
+    io.out.bits.rhsOffset := 0.U
+    io.out.bits.writeAddr := 0.U
+    io.out.bits.writeEn := 0.U
+    io.out.bits.clear_before_first_accumulation := 0.U
   }
 
   // Static signals
-  io.out.numTiles := io.in.bits.numTiles
+  io.out.bits.numTiles := io.in.bits.numTiles
   // TODO what should these be?
-  io.out.negate := io.in.bits.negate
-  io.out.shiftAmount := io.in.bits.shiftAmount
+  io.out.bits.negate := io.in.bits.negate
+  io.out.bits.shiftAmount := io.in.bits.shiftAmount
 }

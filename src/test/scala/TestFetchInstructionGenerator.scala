@@ -78,37 +78,39 @@ class TestFetchInstructionGenerator()
         for (lhs_l2 <- 0 to lhs_l2_per_matrix - 1) {
           for (rhs_l2 <- 0 to rhs_l2_per_matrix - 1) {
             for (z_l2 <- 0 to z_l2_per_matrix - 1) {
-
+              c.io.out.ready.poke(true)
+              c.io.out.valid.expect(true)
               // LHS
-              c.io.out.dram_block_count.expect(dram_block_count)
-              c.io.out.dram_block_offset_bytes.expect(dram_block_offset_bytes)
-              c.io.out.dram_block_size_bytes.expect(dram_block_size_bytes)
-              c.io.out.dram_base.expect(
+              c.io.out.bits.dram_block_count.expect(dram_block_count)
+              c.io.out.bits.dram_block_offset_bytes.expect(dram_block_offset_bytes)
+              c.io.out.bits.dram_block_size_bytes.expect(dram_block_size_bytes)
+              c.io.out.bits.dram_base.expect(
                 dram_base_lhs + lhs_l2 * z_l2_per_matrix * lhs_bytes_per_l2 + z_l2 * dram_block_size_bytes
               )
               // fetch_base_lhs + lhs_l2*z_l2_per_matrix*lhs_bytes_per_l2 + z_l2 * frc.dram_block_size_bytes
-              c.io.out.tiles_per_row.expect(tiles_per_row)
-              c.io.out.bram_id_range.expect(bram_id_range)
-              c.io.out.bram_id_start.expect(0)
-              c.io.out.bram_addr_base.expect(
+              c.io.out.bits.tiles_per_row.expect(tiles_per_row)
+              c.io.out.bits.bram_id_range.expect(bram_id_range)
+              c.io.out.bits.bram_id_start.expect(0)
+              c.io.out.bits.bram_addr_base.expect(
                 current_bram_region * rhs_l0_per_bram * exec_to_fetch_width_ratio
               )
 
               // Go to next fetch instruction
               c.clock.step(1)
-
+              c.io.out.ready.poke(true)
+              c.io.out.valid.expect(true)
               // RHS
-              c.io.out.dram_block_count.expect(dram_block_count)
-              c.io.out.dram_block_offset_bytes.expect(dram_block_offset_bytes)
-              c.io.out.dram_block_size_bytes.expect(dram_block_size_bytes)
-              c.io.out.dram_base.expect(
+              c.io.out.bits.dram_block_count.expect(dram_block_count)
+              c.io.out.bits.dram_block_offset_bytes.expect(dram_block_offset_bytes)
+              c.io.out.bits.dram_block_size_bytes.expect(dram_block_size_bytes)
+              c.io.out.bits.dram_base.expect(
                 dram_base_rhs + rhs_l2 * z_l2_per_matrix * rhs_bytes_per_l2 + z_l2 * dram_block_size_bytes
               )
 
-              c.io.out.tiles_per_row.expect(tiles_per_row)
-              c.io.out.bram_id_range.expect(bram_id_range)
-              c.io.out.bram_id_start.expect(numLHSMems)
-              c.io.out.bram_addr_base.expect(
+              c.io.out.bits.tiles_per_row.expect(tiles_per_row)
+              c.io.out.bits.bram_id_range.expect(bram_id_range)
+              c.io.out.bits.bram_id_start.expect(numLHSMems)
+              c.io.out.bits.bram_addr_base.expect(
                 current_bram_region * rhs_l0_per_bram * exec_to_fetch_width_ratio
               )
               // Go to next fetch instruction

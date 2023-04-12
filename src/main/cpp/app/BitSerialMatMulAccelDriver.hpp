@@ -64,14 +64,17 @@ typedef struct {
 } Op;
 
 typedef struct {
-  uint32_t bram_addr_base;
-  uint32_t bram_id_start;
-  uint32_t bram_id_range;
-  void * dram_base;
+  void * dram_base_rhs;
+  void * dram_base_lhs;
   uint32_t dram_block_offset_bytes;
   uint32_t dram_block_size_bytes;
   uint32_t dram_block_count;
   uint32_t tiles_per_row;
+  uint32_t z_l2_per_matrix;
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t lhs_bytes_per_l2;
+  uint32_t rhs_bytes_per_l2;
 } FetchRunCfg;
 
 typedef struct {
@@ -88,9 +91,12 @@ typedef struct {
 typedef struct {
   void * dram_base;
   uint64_t dram_skip;
-  uint32_t resmem_addr;
-  bool waitComplete;
-  uint32_t waitCompleteBytes;
+  uint32_t lhs_l1_per_l2;
+  uint32_t rhs_l1_per_l2;
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t z_l2_per_matrix;
+  uint32_t nrows_a;
 } ResultRunCfg;
 
 typedef struct {
@@ -188,11 +194,11 @@ public:
 
   static void printFetchRunCfg(FetchRunCfg r) {
     cout << "FetchRunCfg ============================" << endl;
-    cout << "bram_addr_base: " << r.bram_addr_base << endl;
-    cout << "bram_id_start: " << r.bram_id_start << endl;
-    cout << "bram_id_range: " << r.bram_id_range << endl;
+    // cout << "bram_addr_base: " << r.bram_addr_base << endl;
+    // cout << "bram_id_start: " << r.bram_id_start << endl;
+    // cout << "bram_id_range: " << r.bram_id_range << endl;
     cout << "tiles_per_row: " << r.tiles_per_row << endl;
-    cout << "dram_base: " << (uint64_t) r.dram_base << endl;
+    //cout << "dram_base: " << (uint64_t) r.dram_base << endl;
     cout << "dram_block_offset_bytes: " << r.dram_block_offset_bytes << endl;
     cout << "dram_block_size_bytes: " << r.dram_block_size_bytes << endl;
     cout << "dram_block_count: " << r.dram_block_count << endl;
@@ -235,19 +241,19 @@ public:
   // do a sanity check on a FetchRunCfg in terms of alignment and
   // out-of-bounds values
   void verifyFetchRunCfg(FetchRunCfg f) {
-    const size_t exec_to_fetch_width_ratio = m_cfg.dpaDimCommon / m_cfg.readChanWidth;
-    // ensure all DRAM accesses are aligned
-    assert(((uint64_t) f.dram_base) % FETCH_ADDRALIGN == 0);
-    assert(f.dram_block_offset_bytes % FETCH_ADDRALIGN == 0);
-    assert(f.dram_block_size_bytes % FETCH_SIZEALIGN == 0);
-    // ensure that BRAM accesses are within existing range
-    assert(f.bram_id_start < get_fetch_nodes_per_group());
-    assert(f.bram_id_start + f.bram_id_range < get_fetch_nodes_per_group());
-    if(f.bram_id_start < get_fetch_first_rhs_id()) {
-      assert(f.bram_addr_base < m_cfg.lhsEntriesPerMem * exec_to_fetch_width_ratio);
-    } else {
-      assert(f.bram_addr_base < m_cfg.rhsEntriesPerMem * exec_to_fetch_width_ratio);
-    }
+    // const size_t exec_to_fetch_width_ratio = m_cfg.dpaDimCommon / m_cfg.readChanWidth;
+    // // ensure all DRAM accesses are aligned
+    // assert(((uint64_t) f.dram_base) % FETCH_ADDRALIGN == 0);
+    // assert(f.dram_block_offset_bytes % FETCH_ADDRALIGN == 0);
+    // assert(f.dram_block_size_bytes % FETCH_SIZEALIGN == 0);
+    // // ensure that BRAM accesses are within existing range
+    // assert(f.bram_id_start < get_fetch_nodes_per_group());
+    // assert(f.bram_id_start + f.bram_id_range < get_fetch_nodes_per_group());
+    // if(f.bram_id_start < get_fetch_first_rhs_id()) {
+    //   assert(f.bram_addr_base < m_cfg.lhsEntriesPerMem * exec_to_fetch_width_ratio);
+    // } else {
+    //   assert(f.bram_addr_base < m_cfg.rhsEntriesPerMem * exec_to_fetch_width_ratio);
+    // }
   }
 
   // do a sanity check on a ResultRunCfg in terms of alignment and
@@ -342,10 +348,13 @@ public:
   // push a command to the Fetch runcfg queue
   void push_fetch_runcfg(FetchRunCfg cfg) {
     // set up all the fields for the runcfg
-    m_accel->set_fetch_runcfg_bits_bram_addr_base(cfg.bram_addr_base);
-    m_accel->set_fetch_runcfg_bits_bram_id_range(cfg.bram_id_range);
-    m_accel->set_fetch_runcfg_bits_bram_id_start(cfg.bram_id_start);
-    m_accel->set_fetch_runcfg_bits_dram_base((AccelDblReg) cfg.dram_base);
+    m_accel->set_fetch_runcfg_bits_rhs_bytes_per_l2(cfg.rhs_bytes_per_l2);
+    m_accel->set_fetch_runcfg_bits_lhs_bytes_per_l2(cfg.lhs_bytes_per_l2);
+    m_accel->set_fetch_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
+    m_accel->set_fetch_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix); 
+    m_accel->set_fetch_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix); 
+    m_accel->set_fetch_runcfg_bits_dram_base_lhs((AccelDblReg) cfg.dram_base_lhs);
+    m_accel->set_fetch_runcfg_bits_dram_base_rhs((AccelDblReg) cfg.dram_base_rhs);
     m_accel->set_fetch_runcfg_bits_dram_block_offset_bytes(cfg.dram_block_offset_bytes);
     m_accel->set_fetch_runcfg_bits_dram_block_size_bytes(cfg.dram_block_size_bytes);
     m_accel->set_fetch_runcfg_bits_dram_block_count(cfg.dram_block_count);
@@ -355,7 +364,7 @@ public:
     // push to runcfg FIFO
     assert(!fetch_runcfg_full());
     m_accel->set_fetch_runcfg_valid(1);
-    m_accel->set_fetch_runcfg_valid(0);
+    
   }
 
   // push a command to the Exec runcfg queue
@@ -380,13 +389,19 @@ public:
     // set up all the fields for the command
     m_accel->set_result_runcfg_bits_dram_base((AccelDblReg) cfg.dram_base);
     m_accel->set_result_runcfg_bits_dram_skip(cfg.dram_skip);
-    m_accel->set_result_runcfg_bits_resmem_addr(cfg.resmem_addr);
-    m_accel->set_result_runcfg_bits_waitComplete(cfg.waitComplete ? 1 : 0);
-    m_accel->set_result_runcfg_bits_waitCompleteBytes(cfg.waitCompleteBytes);
+    // m_accel->set_result_runcfg_bits_resmem_addr(cfg.resmem_addr);
+    // m_accel->set_result_runcfg_bits_waitComplete(cfg.waitComplete ? 1 : 0);
+    // m_accel->set_result_runcfg_bits_waitCompleteBytes(cfg.waitCompleteBytes);
+    m_accel->set_result_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
+    m_accel->set_result_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix); 
+    m_accel->set_result_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
+    m_accel->set_result_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2); 
+    m_accel->set_result_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
+    m_accel->set_result_runcfg_bits_nrows_a(cfg.nrows_a);
+
     // push to runcfg FIFO
     assert(!result_runcfg_full());
     m_accel->set_result_runcfg_valid(1);
-    m_accel->set_result_runcfg_valid(0);
   }
 
   // initialize the tokens in FIFOs representing shared resources

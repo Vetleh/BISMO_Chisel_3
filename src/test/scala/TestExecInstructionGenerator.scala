@@ -98,15 +98,15 @@ class TestExecInstructionGenerator()
 
                   val writeEn = if (z_l2 == z_l2_per_matrix - 1) 1 else 0
                   val doClear = if (z_l2 == 0) 1 else 0
-
-                  c.io.out.negate.expect(negate)
-                  c.io.out.numTiles.expect(numTiles)
-                  c.io.out.shiftAmount.expect(shiftAmount)
-                  c.io.out.lhsOffset.expect(lhsOffset)
-                  c.io.out.rhsOffset.expect(rhsOffset)
-                  c.io.out.writeAddr.expect(current_resmem_region)
-                  c.io.out.writeEn.expect(writeEn)
-                  c.io.out.clear_before_first_accumulation.expect(doClear)
+                  c.io.out.ready.poke(true)
+                  c.io.out.bits.negate.expect(negate)
+                  c.io.out.bits.numTiles.expect(numTiles)
+                  c.io.out.bits.shiftAmount.expect(shiftAmount)
+                  c.io.out.bits.lhsOffset.expect(lhsOffset)
+                  c.io.out.bits.rhsOffset.expect(rhsOffset)
+                  c.io.out.bits.writeAddr.expect(current_resmem_region)
+                  c.io.out.bits.writeEn.expect(writeEn)
+                  c.io.out.bits.clear_before_first_accumulation.expect(doClear)
                   if (z_l2 == z_l2_per_matrix - 1) {
                     if (current_resmem_region < resmem_regions - 1) {
                       current_resmem_region = current_resmem_region + 1

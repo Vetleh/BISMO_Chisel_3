@@ -384,19 +384,19 @@ protected:
   }
 
   void makeinstr_fetch_run(FetchRunCfg r) {
-    if(r.dram_block_size_bytes == r.dram_block_offset_bytes) {
-      // merge consecutive blocks to speed up fetch:
-      // one big block instead of several smaller ones
-      r.dram_block_size_bytes *= r.dram_block_count;
-      r.dram_block_offset_bytes *= r.dram_block_count;
-      r.dram_block_count = 1;
-    }
+    // if(r.dram_block_size_bytes == r.dram_block_offset_bytes) {
+    //   // merge consecutive blocks to speed up fetch:
+    //   // one big block instead of several smaller ones
+    //   r.dram_block_size_bytes *= r.dram_block_count;
+    //   r.dram_block_offset_bytes *= r.dram_block_count;
+    //   r.dram_block_count = 1;
+    // }
     // ensure generated runcfg for fetch is valid
     m_acc->verifyFetchRunCfg(r);
     // count requested fetch bytes for statistics
-    uint32_t fetchPerGroup = r.dram_block_size_bytes * r.dram_block_count;
-    m_bytes_to_fetch += fetchPerGroup;
-    m_fetch_op.push_back(m_acc->make_op(opRun, 0));
+    // uint32_t fetchPerGroup = r.dram_block_size_bytes * r.dram_block_count;
+    // m_bytes_to_fetch += fetchPerGroup;
+    // m_fetch_op.push_back(m_acc->make_op(opRun, 0));
     m_fetch_runcfg.push_back(r);
   }
 
@@ -410,7 +410,7 @@ protected:
     m_acc->verifyResultRunCfg(rrc);
     // count result bytes for statistics
     m_bytes_to_write += m_hwcfg.dpaDimLHS * m_hwcfg.dpaDimRHS * sizeof(ResultType);
-    m_result_op.push_back(m_acc->make_op(opRun, 0));
+    // m_result_op.push_back(m_acc->make_op(opRun, 0));
     m_result_runcfg.push_back(rrc);
   }
 
@@ -606,7 +606,7 @@ protected:
     //Binary matrix
     assert(lhs.nbits == 1 && rhs.nbits == 1);
 
-    lhs.printSummary();
+    /*lhs.printSummary();
     rhs.printSummary();
     lhs.printHex();
     rhs.printHex();
@@ -629,68 +629,53 @@ protected:
     cout << "rhs_bytes_per_l2	" <<	rhs_bytes_per_l2	<< endl;
     cout << "z_l2_per_matrix " << z_l2_per_matrix << endl;
     cout << "lhs_l2_per_matrix	" <<	lhs_l2_per_matrix	<< endl;
-    cout << "rhs_l2_per_matrix	" <<	rhs_l2_per_matrix	<< endl;
+    cout << "rhs_l2_per_matrix	" <<	rhs_l2_per_matrix	<< endl;*/
 
     const uint64_t fetch_base_lhs = (uint64_t) m_accelLHS;
     const uint64_t fetch_base_rhs = (uint64_t) m_accelRHS;
     uint64_t res_base = (uint64_t) m_accelRes;
+
+    FetchRunCfg frc = {
+      .dram_base_rhs = (void*) fetch_base_rhs,
+      .dram_base_lhs = (void*) fetch_base_lhs,
+      .dram_block_offset_bytes = (lhs.ncols_a / 8),
+      .dram_block_size_bytes = lhs_l0_per_l1 * dpa_z_bytes,
+      .dram_block_count = lhs_bytes_per_l2 / (lhs_l0_per_l1 * dpa_z_bytes),
+      .tiles_per_row = lhs_l0_per_l1 * exec_to_fetch_width_ratio,
+      .z_l2_per_matrix = z_l2_per_matrix,
+      .lhs_l2_per_matrix = lhs_l2_per_matrix,
+      .rhs_l2_per_matrix = rhs_l2_per_matrix,
+      .lhs_bytes_per_l2 = lhs_bytes_per_l2,
+      .rhs_bytes_per_l2 = rhs_bytes_per_l2
+    };
+
+    makeinstr_fetch_run(frc);
+    
+    ResultRunCfg rrc = {
+        .dram_base = (void *)res_base,
+        .dram_skip = lhs_eff_rows() * sizeof(ResultType),
+        .lhs_l1_per_l2 = lhs_l1_per_l2,
+        .rhs_l1_per_l2 = rhs_l1_per_l2,
+        .lhs_l2_per_matrix = lhs_l2_per_matrix,
+        .rhs_l2_per_matrix = rhs_l2_per_matrix,
+        .z_l2_per_matrix = z_l2_per_matrix,
+        .nrows_a = lhs_eff_rows(),
+    };
+    
+    makeinstr_result_run(rrc);
 
     for(int lhs_l2 = 0; lhs_l2 < lhs_l2_per_matrix; lhs_l2++) {
       for(int rhs_l2 = 0; rhs_l2 < rhs_l2_per_matrix; rhs_l2++) {
         for(int z_l2 = 0; z_l2 < z_l2_per_matrix; z_l2++) {
           // acquire fetch buffers to fill
           makeinstr_fetch_sync_getexecbuffer();
-          FetchRunCfg frc;
-          // TODO avoid redundant fetches here
+
           // fetch lhs l2 tile
-          frc.bram_addr_base = current_bram_region * lhs_l0_per_bram * exec_to_fetch_width_ratio;
-          frc.bram_id_start = 0;
-          frc.bram_id_range = dpa_y - 1;
-
-          size_t bytesPerFetchGroup, bytesPerRow;
-          bytesPerRow = (lhs.ncols_a / 8);
-          bytesPerFetchGroup = lhs_bytes_per_l2;
-          // was: lhs_l0_per_l1 * lhs_l1_per_l2
-          frc.tiles_per_row = lhs_l0_per_l1 * exec_to_fetch_width_ratio;
-          // size of each block in bytes (contiguous in memory)
-          frc.dram_block_size_bytes = lhs_l0_per_l1 * dpa_z_bytes;
-          frc.dram_base = (void *)(fetch_base_lhs + lhs_l2*z_l2_per_matrix*lhs_bytes_per_l2 + z_l2 * frc.dram_block_size_bytes);
-          // number of blocks to fetch
-          assert(bytesPerFetchGroup % frc.dram_block_size_bytes == 0);
-          assert(bytesPerFetchGroup / frc.dram_block_size_bytes >= 1);
-          frc.dram_block_count = bytesPerFetchGroup / frc.dram_block_size_bytes;
-          // offset to next block to be fetched
-          frc.dram_block_offset_bytes = bytesPerRow;
-          // only issue fetch if not already in cache
-          if(m_cached_lhs[current_bram_region] != (uint64_t) frc.dram_base) {
-            //m_acc->printFetchRunCfg(frc);
-            makeinstr_fetch_run(frc);
-            m_cached_lhs[current_bram_region] = (uint64_t) frc.dram_base;
-          }
-
+          m_fetch_op.push_back(m_acc->make_op(opRun, 0));
+            
           // fetch rhs l2 tile
-          frc.bram_addr_base = current_bram_region * rhs_l0_per_bram * exec_to_fetch_width_ratio;
-          frc.bram_id_start = dpa_y;
-          frc.bram_id_range = dpa_x - 1;
-          bytesPerFetchGroup = rhs_bytes_per_l2;
-          // was: rhs_l0_per_l1 * rhs_l1_per_l2
-          frc.tiles_per_row = rhs_l0_per_l1 * exec_to_fetch_width_ratio;
-          // size of each block in bytes (contiguous in memory)
-          frc.dram_block_size_bytes = rhs_l0_per_l1 * dpa_z_bytes;
-          frc.dram_base = (void *)(fetch_base_rhs + rhs_l2*z_l2_per_matrix*rhs_bytes_per_l2 + z_l2 * frc.dram_block_size_bytes);
-          // number of blocks to fetch
-          assert(bytesPerFetchGroup % frc.dram_block_size_bytes == 0);
-          assert(bytesPerFetchGroup / frc.dram_block_size_bytes >= 1);
-          frc.dram_block_count = bytesPerFetchGroup / frc.dram_block_size_bytes;
-          // offset to next block to be fetched
-          frc.dram_block_offset_bytes = bytesPerRow;
-
-          // only issue fetch if not already in cache
-          if(m_cached_rhs[current_bram_region] != (uint64_t) frc.dram_base) {
-            //m_acc->printFetchRunCfg(frc);
-            makeinstr_fetch_run(frc);
-            m_cached_rhs[current_bram_region] = (uint64_t) frc.dram_base;
-          }
+          m_fetch_op.push_back(m_acc->make_op(opRun, 0));
+          
 
           // send the prepared buffers to exec
           makeinstr_fetch_sync_putexecbuffer();
@@ -726,17 +711,8 @@ protected:
                 makeinstr_exec_sync_putresultbuffer();
                 // result stage: acquire result buffer
                 makeinstr_result_sync_getexecbuffer();
+                m_result_op.push_back(m_acc->make_op(opRun, 0));
                 // generate result
-                ResultRunCfg rrc;
-                rrc.resmem_addr = current_resmem_region;
-                // find the inds of which L1 tile we are currently working on
-                size_t lhs_tile = lhs_l1_per_l2 * lhs_l2 + lhs_l1;
-                size_t rhs_tile = rhs_l1_per_l2 * rhs_l2 + rhs_l1;
-                rrc.dram_base = get_result_tile_ptr(lhs_tile, rhs_tile);
-                rrc.dram_skip = lhs_eff_rows() * sizeof(ResultType);
-                rrc.waitComplete = false;
-                rrc.waitCompleteBytes = 0;
-                makeinstr_result_run(rrc);
                 makeinstr_result_sync_putexecbuffer();
                 // use next resmem region for next time
                 current_resmem_region = current_resmem_region < resmem_regions-1 ? current_resmem_region + 1 : 0;
@@ -750,14 +726,5 @@ protected:
         }
       }
     }
-    // wait until all result writes are complete
-    ResultRunCfg rrc;
-    rrc.waitComplete = true;
-    rrc.waitCompleteBytes = resBytes();
-    // these params are ignored when waitComplete = true
-    rrc.resmem_addr = 0;
-    rrc.dram_base = 0;
-    rrc.dram_skip = 0;
-    makeinstr_result_run(rrc);
   }
 };

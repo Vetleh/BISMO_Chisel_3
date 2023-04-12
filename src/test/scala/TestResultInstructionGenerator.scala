@@ -74,14 +74,13 @@ class TestResultInstructionGenerator()
               for (rhs_l1 <- 0 until rhs_l1_per_l2) {
                 val lhs_tile = lhs_l1_per_l2 * lhs_l2 + lhs_l1
                 val rhs_tile = rhs_l1_per_l2 * rhs_l2 + rhs_l1
-                println(lhs_tile)
-                println(rhs_tile)
-                c.io.out.resmem_addr.expect(current_bram_region)
-                c.io.out.dram_base
+                c.io.out.ready.poke(true)
+                c.io.out.bits.resmem_addr.expect(current_bram_region)
+                c.io.out.bits.dram_base
                   .expect(get_result_tile_ptr(lhs_tile, rhs_tile))
-                c.io.out.dram_skip.expect(dram_skip)
-                c.io.out.waitComplete.expect(0)
-                c.io.out.waitCompleteBytes.expect(0)
+                c.io.out.bits.dram_skip.expect(dram_skip)
+                c.io.out.bits.waitComplete.expect(0)
+                c.io.out.bits.waitCompleteBytes.expect(0)
 
                 if (current_bram_region < bram_regions - 1) {
                   current_bram_region = current_bram_region + 1
