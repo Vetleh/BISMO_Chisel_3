@@ -199,7 +199,7 @@ class BitSerialMatMulAccel(
       )
     )
     val exec_runcfg = Flipped(
-      Decoupled(new ExecStageCtrlIO(myP.execStageParams))
+      Decoupled(new ExecInstructionGeneratorIn(myP.execStageParams))
     )
     val result_runcfg = Flipped(
       Decoupled(
@@ -232,15 +232,16 @@ class BitSerialMatMulAccel(
       myP.fetchStageParams.mrp.dataWidth
     )
   )
-  // val execInstructionGenerator = Module(
-  //   new ExecInstructionGenerator(
-  //     myP.execStageParams,
-  //     myP.dpaDimCommon,
-  //     myP.fetchStageParams.mrp.dataWidth,
-  //     myP.lhsEntriesPerMem,
-  //     myP.rhsEntriesPerMem
-  //   )
-  // )
+
+  val execInstructionGenerator = Module(
+    new ExecInstructionGenerator(
+      myP.execStageParams,
+      myP.dpaDimCommon,
+      myP.fetchStageParams.mrp.dataWidth,
+      myP.lhsEntriesPerMem,
+      myP.rhsEntriesPerMem
+    )
+  )
 
   val resultInstructionGenerator = Module(
     new ResultInstructionGenerator(
@@ -266,10 +267,10 @@ class BitSerialMatMulAccel(
 
   // Wire up result instruction generator
   fetchInstructionGenerator.io.in <> io.fetch_runcfg
+  execInstructionGenerator.io.in <> io.exec_runcfg
   resultInstructionGenerator.io.in <> io.result_runcfg
 
   // resultOpGenerator.io.in <> io.result_op
-
 
   // instantiate accelerator stages
   val fetchStage = Module(new FetchStage(myP.fetchStageParams)).io
@@ -300,7 +301,10 @@ class BitSerialMatMulAccel(
     )
   ).io
   val execRunCfgQ = Module(
-    new FPGAQueue(chiselTypeOf(io.exec_runcfg.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(execInstructionGenerator.io.out.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   val resultRunCfgQ = Module(
     new FPGAQueue(
@@ -384,7 +388,7 @@ class BitSerialMatMulAccel(
   execOpQ.deq <> execCtrl.op
   execRunCfgQ.deq <> execCtrl.runcfg
   enqPulseGenFromValid(execOpQ.enq, io.exec_op)
-  enqPulseGenFromValid(execRunCfgQ.enq, io.exec_runcfg)
+  enqPulseGenFromValid(execRunCfgQ.enq, execInstructionGenerator.io.out)
 
   // wire-up: command queues and pulse generators for result stage
   resultCtrl.enable := io.result_enable

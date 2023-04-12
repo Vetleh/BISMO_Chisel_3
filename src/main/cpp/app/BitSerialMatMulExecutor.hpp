@@ -401,7 +401,6 @@ protected:
   }
 
   void makeinstr_exec_run(ExecRunCfg r) {
-    m_exec_op.push_back(m_acc->make_op(opRun, 0));
     m_exec_runcfg.push_back(r);
   }
 
@@ -651,6 +650,19 @@ protected:
 
     makeinstr_fetch_run(frc);
     
+    ExecRunCfg erc = {
+      .doNegate = 0,
+      .numTiles = lhs_l0_per_l1,
+      .shiftAmount = 0,
+      .lhs_l1_per_l2 = lhs_l1_per_l2,
+      .rhs_l1_per_l2 = rhs_l1_per_l2,
+      .lhs_l2_per_matrix = lhs_l2_per_matrix,
+      .rhs_l2_per_matrix = rhs_l2_per_matrix,
+      .z_l2_per_matrix = z_l2_per_matrix
+    };
+
+    makeinstr_exec_run(erc);
+    
     ResultRunCfg rrc = {
         .dram_base = (void *)res_base,
         .dram_skip = lhs_eff_rows() * sizeof(ResultType),
@@ -661,7 +673,7 @@ protected:
         .z_l2_per_matrix = z_l2_per_matrix,
         .nrows_a = lhs_eff_rows(),
     };
-    
+
     makeinstr_result_run(rrc);
 
     for(int lhs_l2 = 0; lhs_l2 < lhs_l2_per_matrix; lhs_l2++) {
@@ -691,20 +703,9 @@ protected:
                 // exec stage acquires new result buffer
                 makeinstr_exec_sync_getresultbuffer();
               }
-              ExecRunCfg erc;
-              erc.numTiles = lhs_l0_per_l1;
-              erc.lhsOffset = current_bram_region * lhs_l0_per_bram + lhs_l1 * erc.numTiles;
-              erc.lhsOffset *= exec_to_fetch_width_ratio;
-              erc.rhsOffset = current_bram_region * rhs_l0_per_bram + rhs_l1 * erc.numTiles;
-              erc.rhsOffset *= exec_to_fetch_width_ratio;
-              erc.doNegate = 0;
-              erc.shiftAmount = 0;
-              erc.doClear = (z_l2 == 0 ? 1 : 0); // clear when starting new stripe
-              // write result at the end of z tile
-              erc.writeEn = (z_l2 == z_l2_per_matrix - 1 ? 1 : 0);
-              erc.writeAddr = current_resmem_region;
+        
               //m_acc->printExecRunCfg(erc);
-              makeinstr_exec_run(erc);
+              m_exec_op.push_back(m_acc->make_op(opRun, 0));
 
               if(z_l2 == z_l2_per_matrix - 1) {
                 // finishing a stripe: release result buffer from exec

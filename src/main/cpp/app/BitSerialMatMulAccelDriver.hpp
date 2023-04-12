@@ -78,14 +78,14 @@ typedef struct {
 } FetchRunCfg;
 
 typedef struct {
-  uint32_t lhsOffset;
-  uint32_t rhsOffset;
   uint32_t doNegate;
   uint32_t numTiles;
   uint32_t shiftAmount;
-  bool doClear;
-  bool writeEn;
-  uint32_t writeAddr;
+  uint32_t lhs_l1_per_l2;
+  uint32_t rhs_l1_per_l2;
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t z_l2_per_matrix;
 } ExecRunCfg;
 
 typedef struct {
@@ -207,14 +207,14 @@ public:
 
   static void printExecRunCfg(ExecRunCfg r) {
     cout << "ExecRunCfg ============================" << endl;
-    cout << "lhsOffset: " << r.lhsOffset << endl;
-    cout << "rhsOffset: " << r.rhsOffset << endl;
+    // cout << "lhsOffset: " << r.lhsOffset << endl;
+    // cout << "rhsOffset: " << r.rhsOffset << endl;
     cout << "doNegate: " << r.doNegate << endl;
     cout << "numTiles: " << r.numTiles << endl;
     cout << "shiftAmount: " << r.shiftAmount << endl;
-    cout << "doClear: " << r.doClear << endl;
-    cout << "writeEn: " << r.writeEn << endl;
-    cout << "writeAddr: " << r.writeAddr << endl;
+    // cout << "doClear: " << r.doClear << endl;
+    // cout << "writeEn: " << r.writeEn << endl;
+    // cout << "writeAddr: " << r.writeAddr << endl;
     cout << "========================================" << endl;
   }
 
@@ -370,18 +370,18 @@ public:
   // push a command to the Exec runcfg queue
   void push_exec_runcfg(ExecRunCfg cfg) {
     // set up all the fields for the runcfg
-    m_accel->set_exec_runcfg_bits_clear_before_first_accumulation(cfg.doClear ? 1 : 0);
-    m_accel->set_exec_runcfg_bits_lhsOffset(cfg.lhsOffset);
     m_accel->set_exec_runcfg_bits_negate(cfg.doNegate);
     m_accel->set_exec_runcfg_bits_numTiles(cfg.numTiles);
-    m_accel->set_exec_runcfg_bits_rhsOffset(cfg.rhsOffset);
     m_accel->set_exec_runcfg_bits_shiftAmount(cfg.shiftAmount);
-    m_accel->set_exec_runcfg_bits_writeEn(cfg.writeEn);
-    m_accel->set_exec_runcfg_bits_writeAddr(cfg.writeAddr);
+    m_accel->set_exec_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
+    m_accel->set_exec_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
+    m_accel->set_exec_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
+    m_accel->set_exec_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2);
+    m_accel->set_exec_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
+    
     assert(!exec_runcfg_full());
     // push to runcfg FIFO
     m_accel->set_exec_runcfg_valid(1);
-    m_accel->set_exec_runcfg_valid(0);
   }
 
   // push a command to the Result runcfg queue
