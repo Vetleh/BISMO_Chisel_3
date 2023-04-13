@@ -100,6 +100,13 @@ typedef struct {
 } ResultRunCfg;
 
 typedef struct {
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t lhs_l1_per_l2;
+  uint32_t rhs_l1_per_l2;
+} ResultOp;
+
+typedef struct {
   uint32_t accWidth;
   uint32_t cmdQueueEntries;
   uint32_t dpaDimCommon;
@@ -336,13 +343,14 @@ public:
   }
 
   // push a command to the Result op queue
-  void push_result_op(Op op) {
-    m_accel->set_result_op_bits_opcode((AccelReg) op.opcode);
-    m_accel->set_result_op_bits_token_channel(op.syncChannel);
-    // push into result op FIFO
-    assert(!result_op_full());
+  void push_result_op(ResultOp ro) {
+    m_accel->set_result_op_bits_rhs_l1_per_l2(ro.rhs_l1_per_l2); 
+    m_accel->set_result_op_bits_lhs_l1_per_l2(ro.lhs_l1_per_l2);
+    m_accel->set_result_op_bits_rhs_l2_per_matrix(ro.rhs_l2_per_matrix);
+    m_accel->set_result_op_bits_lhs_l2_per_matrix(ro.lhs_l2_per_matrix);
+    // // push into result op FIFO
     m_accel->set_result_op_valid(1);
-    m_accel->set_result_op_valid(0);
+    // m_accel->set_result_op_valid(0);
   }
 
   // push a command to the Fetch runcfg queue
@@ -415,10 +423,10 @@ public:
     while(m_accel->get_exec_op_count() != 0);
 
     set_stage_enables(0, 0, 0);
-    for(int i = 0; i < EXECRES_TOKENS; i++) {
-      push_result_op(make_op(opSendToken, 0));
-    }
-    assert(m_accel->get_result_op_count() == EXECRES_TOKENS);
+    // for(int i = 0; i < EXECRES_TOKENS; i++) {
+    //   push_result_op(make_op(opSendToken, 0));
+    // }
+    // assert(m_accel->get_result_op_count() == EXECRES_TOKENS);
     set_stage_enables(0, 0, 1);
     while(m_accel->get_result_op_count() != 0);
     set_stage_enables(0, 0, 0);

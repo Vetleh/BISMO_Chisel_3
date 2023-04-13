@@ -32,9 +32,11 @@ class ResultOpGenerator() extends Module {
   val isHigh = RegInit(Bool(), false.B)
   when(isHigh && io.in.valid && io.out.ready) {
     isHigh := false.B
+    io.in.ready := false.B
     io.out.valid := false.B
   }.otherwise {
     when(init && io.in.valid && io.out.ready) {
+      io.in.ready := false.B
       isHigh := true.B
       io.out.valid := true.B
 
@@ -45,7 +47,9 @@ class ResultOpGenerator() extends Module {
       }
     }.elsewhen(counter < total_iters && io.in.valid && io.out.ready) {
       isHigh := true.B
+      io.in.ready := false.B
       io.out.valid := true.B
+      
       when(counter2 === 0.U) {
         io.out.bits.opcode := 2.U
       }.elsewhen(counter2 === 1.U)(

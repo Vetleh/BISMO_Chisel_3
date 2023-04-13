@@ -191,7 +191,7 @@ class BitSerialMatMulAccel(
     // op queues
     val fetch_op = Flipped(Decoupled(new ControllerCmd(1, 1)))
     val exec_op = Flipped(Decoupled(new ControllerCmd(2, 2)))
-    val result_op = Flipped(Decoupled(new ControllerCmd(1, 1)))
+    val result_op = Flipped(Decoupled(new ResultOpGeneratorIn()))
     // config for run ops
     val fetch_runcfg = Flipped(
       Decoupled(
@@ -257,9 +257,9 @@ class BitSerialMatMulAccel(
   //   new FetchOpGenerator()
   // )
 
-  // val resultOpGenerator = Module(
-  //   new ResultOpGenerator()
-  // )
+  val resultOpGenerator = Module(
+    new ResultOpGenerator()
+  )
 
   // Wire up generators
   // fetchInstructionGenerator.io.in <> io.fetch_runcfg
@@ -270,7 +270,7 @@ class BitSerialMatMulAccel(
   execInstructionGenerator.io.in <> io.exec_runcfg
   resultInstructionGenerator.io.in <> io.result_runcfg
 
-  // resultOpGenerator.io.in <> io.result_op
+  resultOpGenerator.io.in <> io.result_op
 
   // instantiate accelerator stages
   val fetchStage = Module(new FetchStage(myP.fetchStageParams)).io
@@ -290,7 +290,7 @@ class BitSerialMatMulAccel(
   ).io
   val resultOpQ = Module(
     new FPGAQueue(
-      chiselTypeOf(io.result_op.bits),
+      chiselTypeOf(resultOpGenerator.io.out.bits),
       myP.cmdQueueEntries
     )
   ).io
@@ -395,7 +395,7 @@ class BitSerialMatMulAccel(
   io.result_op_count := resultOpQ.count
   resultOpQ.deq <> resultCtrl.op
   resultRunCfgQ.deq <> resultCtrl.runcfg
-  enqPulseGenFromValid(resultOpQ.enq, io.result_op)
+  enqPulseGenFromValid(resultOpQ.enq, resultOpGenerator.io.out)
   enqPulseGenFromValid(resultRunCfgQ.enq, resultInstructionGenerator.io.out)
 
   // wire-up: fetch controller and stage
