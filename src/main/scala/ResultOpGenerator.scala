@@ -19,17 +19,18 @@ class ResultOpGenerator() extends Module {
   val counter = RegInit(UInt(32.W), 0.U)
   val counter2 = RegInit(UInt(2.W), 0.U)
 
+  val isHigh = RegInit(Bool(), false.B)
+  val init = RegInit(Bool(), true.B)
+  val initCounter = RegInit(UInt(1.W), 0.U)
+
   val io = IO(new ResultOpGeneratorIO())
   // TODO should this be something else?
   io.out.valid := false.B
   io.out.bits.opcode := 0.U
   io.out.bits.token_channel := 0.U
-  val init = RegInit(Bool(), true.B)
-  val initCounter = RegInit(UInt(1.W), 0.U)
   val total_iters =
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.lhs_l1_per_l2 * io.in.bits.rhs_l1_per_l2
   io.in.ready := true.B
-  val isHigh = RegInit(Bool(), false.B)
   when(isHigh && io.in.valid && io.out.ready) {
     isHigh := false.B
     io.in.ready := false.B
@@ -49,7 +50,7 @@ class ResultOpGenerator() extends Module {
       isHigh := true.B
       io.in.ready := false.B
       io.out.valid := true.B
-      
+
       when(counter2 === 0.U) {
         io.out.bits.opcode := 2.U
       }.elsewhen(counter2 === 1.U)(
@@ -70,6 +71,14 @@ class ResultOpGenerator() extends Module {
       io.out.valid := true.B
       io.out.bits.opcode := 0.U
     }
+  }
+
+  when(!io.in.valid) {
+    counter := 0.U
+    counter2 := 0.U
+    isHigh := false.B
+    init := true.B
+    initCounter := 0.U
   }
 
 }

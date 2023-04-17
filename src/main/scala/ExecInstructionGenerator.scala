@@ -69,10 +69,10 @@ class ExecInstructionGenerator(
     isHigh := false.B
   }.otherwise {
     when(counter < total_iters && io.in.valid && io.out.ready) {
-      isHigh := false.B
+      isHigh := true.B
       io.out.valid := true.B
-      io.out.bits.lhsOffset := current_bram_region * lhs_l0_per_bram.U + lhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
-      io.out.bits.rhsOffset := current_bram_region * rhs_l0_per_bram.U + rhs_l1 * io.in.bits.numTiles * exec_to_fetch_width_ratio.U
+      io.out.bits.lhsOffset := (current_bram_region * lhs_l0_per_bram.U + lhs_l1 * io.in.bits.numTiles) * exec_to_fetch_width_ratio.U
+      io.out.bits.rhsOffset := (current_bram_region * rhs_l0_per_bram.U + rhs_l1 * io.in.bits.numTiles) * exec_to_fetch_width_ratio.U
       io.out.bits.clear_before_first_accumulation := Mux(z_l2 === 0.U, 1.U, 0.U)
       io.out.bits.writeEn := Mux(
         z_l2 === io.in.bits.z_l2_per_matrix - 1.U,
@@ -121,7 +121,17 @@ class ExecInstructionGenerator(
 
   // Static signals
   io.out.bits.numTiles := io.in.bits.numTiles
-  // TODO what should these be?
   io.out.bits.negate := io.in.bits.negate
   io.out.bits.shiftAmount := io.in.bits.shiftAmount
+
+  // Reset state machine when input is no longer valid
+  when(!io.in.valid){
+    z_l2 := 0.U
+    counter := 0.U
+    lhs_l1 := 0.U
+    rhs_l1 := 0.U
+    isHigh := false.B
+    current_bram_region := 0.U
+    current_resmem_region := 0.U
+  }
 }

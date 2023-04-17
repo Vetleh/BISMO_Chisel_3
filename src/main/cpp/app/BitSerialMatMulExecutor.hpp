@@ -168,6 +168,9 @@ public:
     // stop the cycle counter
     m_acc->perf_set_cc_enable(false);
     m_cycles = m_acc->perf_get_cc();
+
+    // Reset instruction generators for next time
+    m_acc->reset_generators();
     // fetch the number of cycles spent in different states for each stage
     updateFetchStateCounters();
     updateExecStateCounters();
@@ -387,7 +390,8 @@ protected:
   void *m_accelRHS;
   void *m_accelRes;
 
-  std::vector<Op> m_fetch_op, m_exec_op;
+  std::vector<ExecOp> m_exec_op;
+  std::vector<FetchOp> m_fetch_op;
   std::vector<ResultOp> m_result_op;
   std::vector<FetchRunCfg> m_fetch_runcfg;
   std::vector<ExecRunCfg> m_exec_runcfg;
@@ -398,59 +402,25 @@ protected:
   // keep track of what we have in the on-chip memory to avoid re-fetching
   std::vector<uint64_t> m_cached_lhs, m_cached_rhs;
 
-  void printExecQueue()
-  {
-    std::vector<string> opName{"run", "send", "receive"};
-    int runcfg_cnt = 0;
-    for (int i = 0; i < m_exec_op.size(); i++)
-    {
-      std::cout << "Exec op " << i << " type " << opName[m_exec_op[i].opcode];
-      std::cout << " channel " << m_exec_op[i].syncChannel << std::endl;
-      if (m_exec_op[i].opcode == opRun)
-      {
-        m_acc->printExecRunCfg(m_exec_runcfg[runcfg_cnt]);
-        runcfg_cnt++;
-      }
-    }
-  }
-
-  void printFetchQueue()
-  {
-    std::vector<string> opName{"run", "send", "receive"};
-    int runcfg_cnt = 0;
-    for (int i = 0; i < m_fetch_op.size(); i++)
-    {
-      std::cout << "Fetch op " << i << " type " << opName[m_fetch_op[i].opcode];
-      std::cout << " channel " << m_fetch_op[i].syncChannel << std::endl;
-      if (m_fetch_op[i].opcode == opRun)
-      {
-        m_acc->printFetchRunCfg(m_fetch_runcfg[runcfg_cnt]);
-        runcfg_cnt++;
-      }
-    }
-  }
-
   void makeinstr_fetch_run(FetchRunCfg r)
   {
-    // if(r.dram_block_size_bytes == r.dram_block_offset_bytes) {
-    //   // merge consecutive blocks to speed up fetch:
-    //   // one big block instead of several smaller ones
-    //   r.dram_block_size_bytes *= r.dram_block_count;
-    //   r.dram_block_offset_bytes *= r.dram_block_count;
-    //   r.dram_block_count = 1;
-    // }
-    // ensure generated runcfg for fetch is valid
     m_acc->verifyFetchRunCfg(r);
-    // count requested fetch bytes for statistics
-    // uint32_t fetchPerGroup = r.dram_block_size_bytes * r.dram_block_count;
-    // m_bytes_to_fetch += fetchPerGroup;
-    // m_fetch_op.push_back(m_acc->make_op(opRun, 0));
     m_fetch_runcfg.push_back(r);
+  }
+
+  void makeop_fetch_run(FetchOp fo)
+  {
+    m_fetch_op.push_back(fo);
   }
 
   void makeinstr_exec_run(ExecRunCfg r)
   {
     m_exec_runcfg.push_back(r);
+  }
+
+  void makeop_exec_run(ExecOp eo)
+  {
+    m_exec_op.push_back(eo);
   }
 
   void makeinstr_result_run(ResultRunCfg rrc)
@@ -463,7 +433,8 @@ protected:
     m_result_runcfg.push_back(rrc);
   }
 
-  void makeop_result_run(ResultOp ro){
+  void makeop_result_run(ResultOp ro)
+  {
     m_result_op.push_back(ro);
   }
 
@@ -481,7 +452,7 @@ protected:
     return m_acc->res_opcount() == 0 && m_result_op_ptr == m_result_op.size();
   }
 
-  // whether all instructions have been pushed to the queues
+  // whether all instructions have been pushed to the queuesm_fetch_op
   bool allPushed()
   {
     return m_fetch_op_ptr == m_fetch_op.size() &&
@@ -536,47 +507,6 @@ protected:
       m_acc->push_result_runcfg(m_result_runcfg[m_result_runcfg_ptr++]);
     }
   }
-
-  // helper functions for generating sync instructions
-  void makeinstr_fetch_sync_getexecbuffer()
-  {
-    m_fetch_op.push_back(m_acc->make_op(opReceiveToken, 0));
-  }
-
-  void makeinstr_fetch_sync_putexecbuffer()
-  {
-    m_fetch_op.push_back(m_acc->make_op(opSendToken, 0));
-  }
-
-  void makeinstr_exec_sync_getfetchbuffer()
-  {
-    m_exec_op.push_back(m_acc->make_op(opReceiveToken, 0));
-  }
-
-  void makeinstr_exec_sync_putfetchbuffer()
-  {
-    m_exec_op.push_back(m_acc->make_op(opSendToken, 0));
-  }
-
-  void makeinstr_exec_sync_getresultbuffer()
-  {
-    m_exec_op.push_back(m_acc->make_op(opReceiveToken, 1));
-  }
-
-  void makeinstr_exec_sync_putresultbuffer()
-  {
-    m_exec_op.push_back(m_acc->make_op(opSendToken, 1));
-  }
-
-  // void makeinstr_result_sync_getexecbuffer()
-  // {
-  //   m_result_op.push_back(m_acc->make_op(opReceiveToken, 0));
-  // }
-
-  // void makeinstr_result_sync_putexecbuffer()
-  // {
-  //   m_result_op.push_back(m_acc->make_op(opSendToken, 0));
-  // }
 
   void updateFetchStateCounters()
   {
@@ -691,31 +621,6 @@ protected:
     // Binary matrix
     assert(lhs.nbits == 1 && rhs.nbits == 1);
 
-    /*lhs.printSummary();
-    rhs.printSummary();
-    lhs.printHex();
-    rhs.printHex();
-    cout << "lhs_bytes_per_l0	" <<	lhs_bytes_per_l0	<< endl;
-    cout << "rhs_bytes_per_l0	" <<	rhs_bytes_per_l0	<< endl;
-    cout << "lhs_l0_per_bram	" <<	lhs_l0_per_bram	<< endl;
-    cout << "rhs_l0_per_bram	" <<	rhs_l0_per_bram	<< endl;
-    cout << "l0_per_stripe	" <<	l0_per_stripe	<< endl;
-    cout << "lhs_l0_per_l1	" <<	lhs_l0_per_l1	<< endl;
-    cout << "lhs_bytes_per_l1	" <<	lhs_bytes_per_l1	<< endl;
-    cout << "rhs_l0_per_l1	" <<	rhs_l0_per_l1	<< endl;
-    cout << "rhs_bytes_per_l1	" <<	rhs_bytes_per_l1	<< endl;
-    cout << "lhs_max_l1_hw	" <<	lhs_max_l1_hw	<< endl;
-    cout << "lhs_max_l1_sw	" <<	lhs_max_l1_sw	<< endl;
-    cout << "lhs_l1_per_l2	" <<	lhs_l1_per_l2	<< endl;
-    cout << "lhs_bytes_per_l2	" <<	lhs_bytes_per_l2	<< endl;
-    cout << "rhs_max_l1_hw	" <<	rhs_max_l1_hw	<< endl;
-    cout << "rhs_max_l1_sw	" <<	rhs_max_l1_sw	<< endl;
-    cout << "rhs_l1_per_l2	" <<	rhs_l1_per_l2	<< endl;
-    cout << "rhs_bytes_per_l2	" <<	rhs_bytes_per_l2	<< endl;
-    cout << "z_l2_per_matrix " << z_l2_per_matrix << endl;
-    cout << "lhs_l2_per_matrix	" <<	lhs_l2_per_matrix	<< endl;
-    cout << "rhs_l2_per_matrix	" <<	rhs_l2_per_matrix	<< endl;*/
-
     const uint64_t fetch_base_lhs = (uint64_t)m_accelLHS;
     const uint64_t fetch_base_rhs = (uint64_t)m_accelRHS;
     uint64_t res_base = (uint64_t)m_accelRes;
@@ -731,9 +636,19 @@ protected:
         .lhs_l2_per_matrix = lhs_l2_per_matrix,
         .rhs_l2_per_matrix = rhs_l2_per_matrix,
         .lhs_bytes_per_l2 = lhs_bytes_per_l2,
-        .rhs_bytes_per_l2 = rhs_bytes_per_l2};
+        .rhs_bytes_per_l2 = rhs_bytes_per_l2,
+        .dpa_z_bytes = dpa_z_bytes,
+        .lhs_l0_per_l1 = lhs_l0_per_l1,
+        .rhs_l0_per_l1 = rhs_l0_per_l1};
 
     makeinstr_fetch_run(frc);
+
+    FetchOp fo = {
+        .lhs_l2_per_matrix = lhs_l2_per_matrix,
+        .rhs_l2_per_matrix = rhs_l2_per_matrix,
+        .z_l2_per_matrix = z_l2_per_matrix};
+
+    makeop_fetch_run(fo);
 
     ExecRunCfg erc = {
         .doNegate = 0,
@@ -747,6 +662,15 @@ protected:
 
     makeinstr_exec_run(erc);
 
+    ExecOp eo = {
+        .z_l2_per_matrix = z_l2_per_matrix,
+        .lhs_l2_per_matrix = lhs_l2_per_matrix,
+        .rhs_l2_per_matrix = rhs_l2_per_matrix,
+        .lhs_l1_per_l2 = lhs_l1_per_l2,
+        .rhs_l1_per_l2 = rhs_l1_per_l2};
+
+    makeop_exec_run(eo);
+
     ResultRunCfg rrc = {
         .dram_base = (void *)res_base,
         .dram_skip = lhs_eff_rows() * sizeof(ResultType),
@@ -756,70 +680,17 @@ protected:
         .rhs_l2_per_matrix = rhs_l2_per_matrix,
         .z_l2_per_matrix = z_l2_per_matrix,
         .nrows_a = lhs_eff_rows(),
+        .wait_complete_bytes = resBytes(),
     };
 
     makeinstr_result_run(rrc);
 
     ResultOp ro = {
-      .lhs_l2_per_matrix = lhs_l2_per_matrix,
-      .rhs_l2_per_matrix = rhs_l2_per_matrix,
-      .lhs_l1_per_l2 = lhs_l1_per_l2,
-      .rhs_l1_per_l2 = rhs_l1_per_l2
-    };
+        .lhs_l2_per_matrix = lhs_l2_per_matrix,
+        .rhs_l2_per_matrix = rhs_l2_per_matrix,
+        .lhs_l1_per_l2 = lhs_l1_per_l2,
+        .rhs_l1_per_l2 = rhs_l1_per_l2};
 
     makeop_result_run(ro);
-
-    for (int lhs_l2 = 0; lhs_l2 < lhs_l2_per_matrix; lhs_l2++)
-    {
-      for (int rhs_l2 = 0; rhs_l2 < rhs_l2_per_matrix; rhs_l2++)
-      {
-        for (int z_l2 = 0; z_l2 < z_l2_per_matrix; z_l2++)
-        {
-          // acquire fetch buffers to fill
-          makeinstr_fetch_sync_getexecbuffer();
-
-          // fetch lhs l2 tile
-          m_fetch_op.push_back(m_acc->make_op(opRun, 0));
-
-          // fetch rhs l2 tile
-          m_fetch_op.push_back(m_acc->make_op(opRun, 0));
-
-          // send the prepared buffers to exec
-          makeinstr_fetch_sync_putexecbuffer();
-
-          // process the fetched L2 tile
-          // exec stage acquires input matrix buffers
-          makeinstr_exec_sync_getfetchbuffer();
-          // process combinations of L1 tiles within the L2 tile
-          for (int lhs_l1 = 0; lhs_l1 < lhs_l1_per_l2; lhs_l1++)
-          {
-            for (int rhs_l1 = 0; rhs_l1 < rhs_l1_per_l2; rhs_l1++)
-            {
-              if (z_l2 == z_l2_per_matrix - 1)
-              {
-                // about to finish a new stripe
-                // exec stage acquires new result buffer
-                makeinstr_exec_sync_getresultbuffer();
-              }
-
-              // m_acc->printExecRunCfg(erc);
-              m_exec_op.push_back(m_acc->make_op(opRun, 0));
-
-              if (z_l2 == z_l2_per_matrix - 1)
-              {
-                // finishing a stripe: release result buffer from exec
-                makeinstr_exec_sync_putresultbuffer();
-                
-                current_resmem_region = current_resmem_region < resmem_regions - 1 ? current_resmem_region + 1 : 0;
-              }
-            }
-          }
-          // finished processing L2 tile
-          // exec releases input matrix buffers
-          makeinstr_exec_sync_putfetchbuffer();
-          current_bram_region = current_bram_region < bram_regions - 1 ? current_bram_region + 1 : 0;
-        }
-      }
-    }
   }
 };

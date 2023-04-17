@@ -29,7 +29,6 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-
 #ifndef BitSerialMatMulAccelDriver_H
 #define BitSerialMatMulAccelDriver_H
 
@@ -40,32 +39,41 @@
 #include <iostream>
 #include "gemmbitserial/gemmbitserial.hpp"
 
-#define CMDFIFO_CAP       16
-#define FETCHEXEC_TOKENS  2
-#define EXECRES_TOKENS    2
-#define N_CTRL_STATES     4
-#define FETCH_ADDRALIGN   64
-#define FETCH_SIZEALIGN   8
+#define CMDFIFO_CAP 16
+#define FETCHEXEC_TOKENS 2
+#define EXECRES_TOKENS 2
+#define N_CTRL_STATES 4
+#define FETCH_ADDRALIGN 64
+#define FETCH_SIZEALIGN 8
 
-#define max(x,y) (x > y ? x : y)
-#define FETCH_ALIGN       max(FETCH_ADDRALIGN, FETCH_SIZEALIGN)
+#define max(x, y) (x > y ? x : y)
+#define FETCH_ALIGN max(FETCH_ADDRALIGN, FETCH_SIZEALIGN)
 
-typedef enum {
-  opRun = 0, opSendToken, opReceiveToken
+typedef enum
+{
+  opRun = 0,
+  opSendToken,
+  opReceiveToken
 } OpCode;
 
-typedef enum {
-  csGetCmd = 0, csRun, csSend, csReceive
+typedef enum
+{
+  csGetCmd = 0,
+  csRun,
+  csSend,
+  csReceive
 } ControllerState;
 
-typedef struct {
+typedef struct
+{
   OpCode opcode;
   uint32_t syncChannel;
 } Op;
 
-typedef struct {
-  void * dram_base_rhs;
-  void * dram_base_lhs;
+typedef struct
+{
+  void *dram_base_rhs;
+  void *dram_base_lhs;
   uint32_t dram_block_offset_bytes;
   uint32_t dram_block_size_bytes;
   uint32_t dram_block_count;
@@ -75,9 +83,20 @@ typedef struct {
   uint32_t rhs_l2_per_matrix;
   uint32_t lhs_bytes_per_l2;
   uint32_t rhs_bytes_per_l2;
+  uint32_t dpa_z_bytes;
+  uint32_t lhs_l0_per_l1;
+  uint32_t rhs_l0_per_l1;
 } FetchRunCfg;
 
-typedef struct {
+typedef struct
+{
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t z_l2_per_matrix;
+} FetchOp;
+
+typedef struct
+{
   uint32_t doNegate;
   uint32_t numTiles;
   uint32_t shiftAmount;
@@ -88,8 +107,18 @@ typedef struct {
   uint32_t z_l2_per_matrix;
 } ExecRunCfg;
 
-typedef struct {
-  void * dram_base;
+typedef struct
+{
+  uint32_t z_l2_per_matrix;
+  uint32_t lhs_l2_per_matrix;
+  uint32_t rhs_l2_per_matrix;
+  uint32_t lhs_l1_per_l2;
+  uint32_t rhs_l1_per_l2;
+} ExecOp;
+
+typedef struct
+{
+  void *dram_base;
   uint64_t dram_skip;
   uint32_t lhs_l1_per_l2;
   uint32_t rhs_l1_per_l2;
@@ -97,16 +126,19 @@ typedef struct {
   uint32_t rhs_l2_per_matrix;
   uint32_t z_l2_per_matrix;
   uint32_t nrows_a;
+  uint32_t wait_complete_bytes;
 } ResultRunCfg;
 
-typedef struct {
+typedef struct
+{
   uint32_t lhs_l2_per_matrix;
   uint32_t rhs_l2_per_matrix;
   uint32_t lhs_l1_per_l2;
   uint32_t rhs_l1_per_l2;
 } ResultOp;
 
-typedef struct {
+typedef struct
+{
   uint32_t accWidth;
   uint32_t cmdQueueEntries;
   uint32_t dpaDimCommon;
@@ -122,20 +154,25 @@ typedef struct {
 typedef uint64_t PackedBitGroupType;
 typedef int32_t ResultType;
 
-class BitSerialMatMulAccelDriver {
+class BitSerialMatMulAccelDriver
+{
 public:
-  BitSerialMatMulAccelDriver(WrapperRegDriver * platform) {
+  BitSerialMatMulAccelDriver(WrapperRegDriver *platform)
+  {
     m_platform = platform;
     m_accel = new BitSerialMatMulAccel(m_platform);
     m_fclk = 200.0;
     update_hw_cfg();
     measure_fclk();
   }
-  ~BitSerialMatMulAccelDriver() {
+  ~BitSerialMatMulAccelDriver()
+  {
   }
 
-  void measure_fclk() {
-    if(m_platform->platformID() != "EmuDriver") {
+  void measure_fclk()
+  {
+    if (m_platform->platformID() != "EmuDriver")
+    {
       uint32_t cc_start = perf_get_cc();
       perf_set_cc_enable(true);
       // sleep for one second of CPU time
@@ -147,72 +184,79 @@ public:
     }
   }
 
-  float fclk_MHz() const {
+  float fclk_MHz() const
+  {
     return m_fclk;
   }
 
   // allocate a GEMMContext compliant with the accelerator size
   gemmbitserial::GEMMContext allocGEMMContext(
-    uint64_t lhsRows, uint64_t depth, uint64_t rhsRows,
-    uint64_t lhsBits, uint64_t rhsBits,
-    bool lhsSigned, bool rhsSigned
-  ) {
+      uint64_t lhsRows, uint64_t depth, uint64_t rhsRows,
+      uint64_t lhsBits, uint64_t rhsBits,
+      bool lhsSigned, bool rhsSigned)
+  {
     const uint64_t regblock_lhs = m_cfg.dpaDimLHS;
     const uint64_t regblock_d = FETCH_ALIGN / sizeof(PackedBitGroupType);
     const uint64_t regblock_rhs = m_cfg.dpaDimRHS;
     const uint64_t cacheBits = 1;
 
     return gemmbitserial::allocGEMMContext_base(
-      lhsRows, depth, rhsRows, lhsBits, rhsBits, lhsSigned, rhsSigned,
-      regblock_lhs, regblock_d, regblock_rhs, cacheBits
-    );
+        lhsRows, depth, rhsRows, lhsBits, rhsBits, lhsSigned, rhsSigned,
+        regblock_lhs, regblock_d, regblock_rhs, cacheBits);
   }
 
   // enable/disable the cycle counter
   // cleared on rising edge (i.e. 0->1 transition)
   // increments by 1 every cycle while enabled
-  void perf_set_cc_enable(bool e) {
+  void perf_set_cc_enable(bool e)
+  {
     m_accel->set_perf_cc_enable(e ? 1 : 0);
   }
 
   // return cycle count
-  uint32_t perf_get_cc() {
+  uint32_t perf_get_cc()
+  {
     return m_accel->get_perf_cc();
   }
 
   // get the number of cycles that elapsed in a given state
   // for each controller
 
-  uint32_t perf_fetch_stats(ControllerState s) {
-    m_accel->set_perf_prf_fetch_sel((uint32_t) s);
+  uint32_t perf_fetch_stats(ControllerState s)
+  {
+    m_accel->set_perf_prf_fetch_sel((uint32_t)s);
     return m_accel->get_perf_prf_fetch_count();
   }
 
-  uint32_t perf_exec_stats(ControllerState s) {
-    m_accel->set_perf_prf_exec_sel((uint32_t) s);
+  uint32_t perf_exec_stats(ControllerState s)
+  {
+    m_accel->set_perf_prf_exec_sel((uint32_t)s);
     return m_accel->get_perf_prf_exec_count();
   }
 
-  uint32_t perf_result_stats(ControllerState s) {
+  uint32_t perf_result_stats(ControllerState s)
+  {
     cout << "Controller state: " << s << endl;
-    m_accel->set_perf_prf_res_sel((uint32_t) s);
+    m_accel->set_perf_prf_res_sel((uint32_t)s);
     return m_accel->get_perf_prf_res_count();
   }
 
-  static void printFetchRunCfg(FetchRunCfg r) {
+  static void printFetchRunCfg(FetchRunCfg r)
+  {
     cout << "FetchRunCfg ============================" << endl;
     // cout << "bram_addr_base: " << r.bram_addr_base << endl;
     // cout << "bram_id_start: " << r.bram_id_start << endl;
     // cout << "bram_id_range: " << r.bram_id_range << endl;
     cout << "tiles_per_row: " << r.tiles_per_row << endl;
-    //cout << "dram_base: " << (uint64_t) r.dram_base << endl;
+    // cout << "dram_base: " << (uint64_t) r.dram_base << endl;
     cout << "dram_block_offset_bytes: " << r.dram_block_offset_bytes << endl;
     cout << "dram_block_size_bytes: " << r.dram_block_size_bytes << endl;
     cout << "dram_block_count: " << r.dram_block_count << endl;
     cout << "========================================" << endl;
   }
 
-  static void printExecRunCfg(ExecRunCfg r) {
+  static void printExecRunCfg(ExecRunCfg r)
+  {
     cout << "ExecRunCfg ============================" << endl;
     // cout << "lhsOffset: " << r.lhsOffset << endl;
     // cout << "rhsOffset: " << r.rhsOffset << endl;
@@ -225,29 +269,35 @@ public:
     cout << "========================================" << endl;
   }
 
-  const size_t get_lhs_total_BRAM_bytes() {
+  const size_t get_lhs_total_BRAM_bytes()
+  {
     return m_cfg.dpaDimLHS * m_cfg.lhsEntriesPerMem * m_cfg.dpaDimCommon / 8;
   }
 
-  const size_t get_rhs_total_BRAM_bytes() {
+  const size_t get_rhs_total_BRAM_bytes()
+  {
     return m_cfg.dpaDimRHS * m_cfg.rhsEntriesPerMem * m_cfg.dpaDimCommon / 8;
   }
 
-  const size_t get_fetch_nodes_per_group() {
+  const size_t get_fetch_nodes_per_group()
+  {
     return (m_cfg.dpaDimLHS + m_cfg.dpaDimRHS);
   }
 
-  const size_t get_fetch_first_lhs_id() {
+  const size_t get_fetch_first_lhs_id()
+  {
     return 0;
   }
 
-  const size_t get_fetch_first_rhs_id() {
+  const size_t get_fetch_first_rhs_id()
+  {
     return m_cfg.dpaDimLHS;
   }
 
   // do a sanity check on a FetchRunCfg in terms of alignment and
   // out-of-bounds values
-  void verifyFetchRunCfg(FetchRunCfg f) {
+  void verifyFetchRunCfg(FetchRunCfg f)
+  {
     // const size_t exec_to_fetch_width_ratio = m_cfg.dpaDimCommon / m_cfg.readChanWidth;
     // // ensure all DRAM accesses are aligned
     // assert(((uint64_t) f.dram_base) % FETCH_ADDRALIGN == 0);
@@ -265,57 +315,70 @@ public:
 
   // do a sanity check on a ResultRunCfg in terms of alignment and
   // out-of-bounds values
-  void verifyResultRunCfg(ResultRunCfg r) {
+  void verifyResultRunCfg(ResultRunCfg r)
+  {
     // ensure all DRAM accesses are aligned to 8 bytes
-    assert(((uint64_t) r.dram_base) % 8 == 0);
+    assert(((uint64_t)r.dram_base) % 8 == 0);
     assert(r.dram_skip % 8 == 0);
   }
 
   // get command counts in FIFOs
-  const uint32_t fetch_opcount() {
+  const uint32_t fetch_opcount()
+  {
     return m_accel->get_fetch_op_count();
   }
-  const uint32_t exec_opcount() {
+  const uint32_t exec_opcount()
+  {
     return m_accel->get_exec_op_count();
   }
-  const uint32_t res_opcount() {
+  const uint32_t res_opcount()
+  {
     return m_accel->get_result_op_count();
   }
 
   // check whether it's possible to write a new element into a queue
-  const bool fetch_op_full() {
+  const bool fetch_op_full()
+  {
     return m_accel->get_fetch_op_ready() == 1 ? false : true;
   }
-  const bool exec_op_full() {
+  const bool exec_op_full()
+  {
     return m_accel->get_exec_op_ready() == 1 ? false : true;
   }
-  const bool result_op_full() {
+  const bool result_op_full()
+  {
     return m_accel->get_result_op_ready() == 1 ? false : true;
   }
-  const bool fetch_runcfg_full() {
+  const bool fetch_runcfg_full()
+  {
     return m_accel->get_fetch_runcfg_ready() == 1 ? false : true;
   }
-  const bool exec_runcfg_full() {
+  const bool exec_runcfg_full()
+  {
     return m_accel->get_exec_runcfg_ready() == 1 ? false : true;
   }
-  const bool result_runcfg_full() {
+  const bool result_runcfg_full()
+  {
     return m_accel->get_result_runcfg_ready() == 1 ? false : true;
   }
 
   // reset the accelerator
-  void reset() {
+  void reset()
+  {
     m_platform->writeReg(0, 1);
     m_platform->writeReg(0, 0);
   }
 
   // enable/disable the execution of each stage
-  void set_stage_enables(const int fetch, const int exec, const int result) {
+  void set_stage_enables(const int fetch, const int exec, const int result)
+  {
     m_accel->set_fetch_enable(fetch);
     m_accel->set_exec_enable(exec);
     m_accel->set_result_enable(result);
   }
 
-  Op make_op(OpCode opcode, uint32_t syncChannel) {
+  Op make_op(OpCode opcode, uint32_t syncChannel)
+  {
     Op ret;
     ret.opcode = opcode;
     ret.syncChannel = syncChannel;
@@ -323,28 +386,37 @@ public:
   }
 
   // push a command to the Fetch op queue
-  void push_fetch_op(Op op) {
-    m_accel->set_fetch_op_bits_opcode((AccelReg) op.opcode);
-    m_accel->set_fetch_op_bits_token_channel(op.syncChannel);
+  void push_fetch_op(FetchOp op)
+  {
+    // m_accel->set_fetch_op_bits_opcode((AccelReg) op.opcode);
+    // m_accel->set_fetch_op_bits_token_channel(op.syncChannel);
+    m_accel->set_fetch_op_bits_rhs_l2_per_matrix(op.rhs_l2_per_matrix);
+    m_accel->set_fetch_op_bits_lhs_l2_per_matrix(op.lhs_l2_per_matrix);
+    m_accel->set_fetch_op_bits_z_l2_per_matrix(op.z_l2_per_matrix);
     // push into fetch op FIFO
     assert(!fetch_op_full());
     m_accel->set_fetch_op_valid(1);
-    m_accel->set_fetch_op_valid(0);
+    // m_accel->set_fetch_op_valid(0);
   }
 
   // push a command to the Exec op queue
-  void push_exec_op(Op op) {
-    m_accel->set_exec_op_bits_opcode((AccelReg) op.opcode);
-    m_accel->set_exec_op_bits_token_channel(op.syncChannel);
+  void push_exec_op(ExecOp eo)
+  {
+    m_accel->set_exec_op_bits_rhs_l1_per_l2(eo.rhs_l1_per_l2);
+    m_accel->set_exec_op_bits_lhs_l1_per_l2(eo.lhs_l1_per_l2);
+    m_accel->set_exec_op_bits_rhs_l2_per_matrix(eo.rhs_l2_per_matrix);
+    m_accel->set_exec_op_bits_lhs_l2_per_matrix(eo.lhs_l2_per_matrix);
+    m_accel->set_exec_op_bits_z_l2_per_matrix(eo.z_l2_per_matrix);
     // push into exec op FIFO
     assert(!exec_op_full());
     m_accel->set_exec_op_valid(1);
-    m_accel->set_exec_op_valid(0);
+    // m_accel->set_exec_op_valid(0);
   }
 
   // push a command to the Result op queue
-  void push_result_op(ResultOp ro) {
-    m_accel->set_result_op_bits_rhs_l1_per_l2(ro.rhs_l1_per_l2); 
+  void push_result_op(ResultOp ro)
+  {
+    m_accel->set_result_op_bits_rhs_l1_per_l2(ro.rhs_l1_per_l2);
     m_accel->set_result_op_bits_lhs_l1_per_l2(ro.lhs_l1_per_l2);
     m_accel->set_result_op_bits_rhs_l2_per_matrix(ro.rhs_l2_per_matrix);
     m_accel->set_result_op_bits_lhs_l2_per_matrix(ro.lhs_l2_per_matrix);
@@ -354,29 +426,34 @@ public:
   }
 
   // push a command to the Fetch runcfg queue
-  void push_fetch_runcfg(FetchRunCfg cfg) {
+  void push_fetch_runcfg(FetchRunCfg cfg)
+  {
     // set up all the fields for the runcfg
     m_accel->set_fetch_runcfg_bits_rhs_bytes_per_l2(cfg.rhs_bytes_per_l2);
     m_accel->set_fetch_runcfg_bits_lhs_bytes_per_l2(cfg.lhs_bytes_per_l2);
     m_accel->set_fetch_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
-    m_accel->set_fetch_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix); 
-    m_accel->set_fetch_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix); 
-    m_accel->set_fetch_runcfg_bits_dram_base_lhs((AccelDblReg) cfg.dram_base_lhs);
-    m_accel->set_fetch_runcfg_bits_dram_base_rhs((AccelDblReg) cfg.dram_base_rhs);
+    m_accel->set_fetch_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
+    m_accel->set_fetch_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
+    m_accel->set_fetch_runcfg_bits_dram_base_lhs((AccelDblReg)cfg.dram_base_lhs);
+    m_accel->set_fetch_runcfg_bits_dram_base_rhs((AccelDblReg)cfg.dram_base_rhs);
     m_accel->set_fetch_runcfg_bits_dram_block_offset_bytes(cfg.dram_block_offset_bytes);
     m_accel->set_fetch_runcfg_bits_dram_block_size_bytes(cfg.dram_block_size_bytes);
     m_accel->set_fetch_runcfg_bits_dram_block_count(cfg.dram_block_count);
+    m_accel->set_fetch_runcfg_bits_dpa_z_bytes(cfg.dpa_z_bytes);
+    m_accel->set_fetch_runcfg_bits_lhs_l0_per_l1(cfg.lhs_l0_per_l1);
+    m_accel->set_fetch_runcfg_bits_rhs_l0_per_l1(cfg.rhs_l0_per_l1);
+
     // hw limitation: tiles_per_row is internally 16 bits
     assert(cfg.tiles_per_row < (1 << 16));
     m_accel->set_fetch_runcfg_bits_tiles_per_row(cfg.tiles_per_row);
     // push to runcfg FIFO
     assert(!fetch_runcfg_full());
     m_accel->set_fetch_runcfg_valid(1);
-    
   }
 
   // push a command to the Exec runcfg queue
-  void push_exec_runcfg(ExecRunCfg cfg) {
+  void push_exec_runcfg(ExecRunCfg cfg)
+  {
     // set up all the fields for the runcfg
     m_accel->set_exec_runcfg_bits_negate(cfg.doNegate);
     m_accel->set_exec_runcfg_bits_numTiles(cfg.numTiles);
@@ -386,24 +463,26 @@ public:
     m_accel->set_exec_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
     m_accel->set_exec_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2);
     m_accel->set_exec_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
-    
+
     assert(!exec_runcfg_full());
     // push to runcfg FIFO
     m_accel->set_exec_runcfg_valid(1);
   }
 
   // push a command to the Result runcfg queue
-  void push_result_runcfg(ResultRunCfg cfg) {
+  void push_result_runcfg(ResultRunCfg cfg)
+  {
     // set up all the fields for the command
-    m_accel->set_result_runcfg_bits_dram_base((AccelDblReg) cfg.dram_base);
+    m_accel->set_result_runcfg_bits_dram_base((AccelDblReg)cfg.dram_base);
     m_accel->set_result_runcfg_bits_dram_skip(cfg.dram_skip);
+    m_accel->set_result_runcfg_bits_wait_complete_bytes(cfg.wait_complete_bytes);
     // m_accel->set_result_runcfg_bits_resmem_addr(cfg.resmem_addr);
     // m_accel->set_result_runcfg_bits_waitComplete(cfg.waitComplete ? 1 : 0);
     // m_accel->set_result_runcfg_bits_waitCompleteBytes(cfg.waitCompleteBytes);
     m_accel->set_result_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
-    m_accel->set_result_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix); 
+    m_accel->set_result_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
     m_accel->set_result_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
-    m_accel->set_result_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2); 
+    m_accel->set_result_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2);
     m_accel->set_result_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
     m_accel->set_result_runcfg_bits_nrows_a(cfg.nrows_a);
 
@@ -413,14 +492,16 @@ public:
   }
 
   // initialize the tokens in FIFOs representing shared resources
-  void init_resource_pools() {
+  void init_resource_pools()
+  {
     set_stage_enables(0, 0, 0);
-    for(int i = 0; i < FETCHEXEC_TOKENS; i++) {
-      push_exec_op(make_op(opSendToken, 0));
-    }
-    assert(m_accel->get_exec_op_count() == FETCHEXEC_TOKENS);
+    // for(int i = 0; i < FETCHEXEC_TOKENS; i++) {
+    //   push_exec_op(make_op(opSendToken, 0));
+    // }
+    // assert(m_accel->get_exec_op_count() == FETCHEXEC_TOKENS);
     set_stage_enables(0, 1, 0);
-    while(m_accel->get_exec_op_count() != 0);
+    while (m_accel->get_exec_op_count() != 0)
+      ;
 
     set_stage_enables(0, 0, 0);
     // for(int i = 0; i < EXECRES_TOKENS; i++) {
@@ -428,17 +509,31 @@ public:
     // }
     // assert(m_accel->get_result_op_count() == EXECRES_TOKENS);
     set_stage_enables(0, 0, 1);
-    while(m_accel->get_result_op_count() != 0);
+    while (m_accel->get_result_op_count() != 0)
+      ;
     set_stage_enables(0, 0, 0);
   }
 
   // get the instantiated hardware config
-  HardwareCfg hwcfg() const {
+  HardwareCfg hwcfg() const
+  {
     return m_cfg;
   }
 
+  void reset_generators()
+  {
+    m_accel->set_exec_op_valid(0);
+    m_accel->set_result_op_valid(0);
+    m_accel->set_fetch_op_valid(0);
+
+    m_accel->set_fetch_runcfg_valid(0);
+    m_accel->set_exec_runcfg_valid(0);
+    m_accel->set_result_runcfg_valid(0);
+  }
+
   // print a summary of the hardware config
-  void print_hwcfg_summary() const {
+  void print_hwcfg_summary() const
+  {
     cout << "accWidth = " << m_cfg.accWidth << endl;
     cout << "cmdQueueEntries = " << m_cfg.cmdQueueEntries << endl;
     cout << "dpaDimCommon = " << m_cfg.dpaDimCommon << endl;
@@ -452,13 +547,14 @@ public:
   }
 
 protected:
-  BitSerialMatMulAccel * m_accel;
-  WrapperRegDriver * m_platform;
+  BitSerialMatMulAccel *m_accel;
+  WrapperRegDriver *m_platform;
   HardwareCfg m_cfg;
   float m_fclk;
 
   // get the instantiated hardware config from accelerator
-  void update_hw_cfg() {
+  void update_hw_cfg()
+  {
     m_cfg.accWidth = m_accel->get_hw_accWidth();
     m_cfg.cmdQueueEntries = m_accel->get_hw_cmdQueueEntries();
     m_cfg.dpaDimCommon = m_accel->get_hw_dpaDimCommon();

@@ -16,6 +16,8 @@ class ResultInstructionGeneratorIn() extends Bundle {
 
   val dram_base = UInt(64.W)
   val dram_skip = UInt(64.W)
+
+  val wait_complete_bytes = UInt(64.W)
 }
 
 class ResultInstructionGeneratorIO(myP: ResultStageParams) extends Bundle {
@@ -39,7 +41,6 @@ class ResultInstructionGenerator(
     return io.in.bits.dram_base + (dpaDimRHS.U * rhs_tile * io.in.bits.nrows_a + dpaDimLHS.U * lhs_tile) * 4.U
   }
   // Calculate size based on dpu
-  val iterations = 32.U
   val counter_2 = RegInit(UInt(1.W), 0.U)
   val current_resmem_region = RegInit(UInt(64.W), 0.U)
 
@@ -61,8 +62,13 @@ class ResultInstructionGenerator(
   val total_iters =
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.lhs_l1_per_l2 * io.in.bits.rhs_l1_per_l2
 
+  io.out.valid := false.B
+  io.in.ready := true.B
+  io.out.bits.dram_skip := 0.U
+  io.out.bits.dram_base := 0.U
+  io.out.bits.resmem_addr := 0.U
   io.out.bits.waitCompleteBytes := 0.U
-  io.out.bits.waitComplete := false.B
+  io.out.bits.waitComplete := 0.U
 
   when(isHigh && io.in.valid && io.out.ready) {
     io.out.bits.dram_skip := 0.U
@@ -114,21 +120,22 @@ class ResultInstructionGenerator(
       io.out.bits.dram_skip := 0.U
       io.out.bits.dram_base := 0.U
       io.out.bits.resmem_addr := 0.U
-      io.out.bits.waitCompleteBytes := 0x10.U
+      io.out.bits.waitCompleteBytes := io.in.bits.wait_complete_bytes
       io.out.bits.waitComplete := true.B
       isHigh := true.B
       counter := counter + 1.U
-    }.otherwise {
-      io.in.ready := true.B
-      io.out.valid := false.B
-      io.out.bits.dram_skip := 0.U
-      io.out.bits.dram_base := 0.U
-      io.out.bits.resmem_addr := 0.U
-      isHigh := false.B
     }
   }
-  // Wire static fields
 
-  // These seems to be used to track waiting, can be a part of the initial wait, should be set at end
-  // Generate instructions and pass it to the Fetch stage controller
+  when(!io.in.valid) {
+    counter := 0.U
+    counter_2 := 0.U
+    current_resmem_region := 0.U
+    isHigh := false.B
+    lhs_l2 := 0.U
+    rhs_l2 := 0.U
+    lhs_l1 := 0.U
+    rhs_l1 := 0.U
+  }
+
 }

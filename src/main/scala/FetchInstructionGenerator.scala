@@ -17,6 +17,10 @@ class FetchInstructionGeneratorIn() extends Bundle {
   val lhs_bytes_per_l2 = UInt(64.W)
   val rhs_bytes_per_l2 = UInt(64.W)
 
+  val dpa_z_bytes = UInt(64.W)
+  val lhs_l0_per_l1 = UInt(64.W)
+  val rhs_l0_per_l1 = UInt(64.W)
+
   val tiles_per_row = UInt(16.W)
 }
 
@@ -65,10 +69,9 @@ class FetchInstructionGenerator(
   io.out.bits.bram_addr_base := 0.U
   io.out.bits.dram_base := 0.U
   io.out.bits.bram_id_start := 0.U
-
-  io.out.bits.dram_block_size_bytes := io.in.bits.dram_block_size_bytes
+  io.out.bits.dram_block_count := 0.U
+  io.out.bits.dram_block_size_bytes := 0.U
   io.out.bits.dram_block_offset_bytes := io.in.bits.dram_block_offset_bytes
-  io.out.bits.dram_block_count := io.in.bits.dram_block_count
 
   io.out.bits.tiles_per_row := io.in.bits.tiles_per_row
   io.out.bits.bram_id_range := 0.U
@@ -78,17 +81,9 @@ class FetchInstructionGenerator(
   val total_iters =
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.z_l2_per_matrix
 
-  io.in.ready := false.B
-  // io.out_op.bits.opcode := 0.U
-  // io.out_op.bits.token_channel := 0.U
-  // // Creates an opcode
-  // def make_op(opcode: UInt, token_channel: UInt) = {
-  //   io.out_op.bits.opcode := opcode
-  //   io.out_op.bits.token_channel := token_channel
-  // }
+  io.in.ready := true.B
 
   when(isHigh && io.in.valid && io.out.ready) {
-    io.out.valid := true.B
     io.out.bits.bram_addr_base := 0.U
     io.out.bits.bram_id_start := 0.U
     io.out.bits.bram_id_range := 0.U
@@ -106,13 +101,31 @@ class FetchInstructionGenerator(
         io.out.bits.bram_id_start := 0.U
         io.out.bits.bram_id_range := (myP.numLHSMems - 1).U
         io.out.bits.dram_base := io.in.bits.dram_base_lhs + lhs_l2 * io.in.bits.z_l2_per_matrix * io.in.bits.lhs_bytes_per_l2 + z_l2 * io.in.bits.dram_block_size_bytes
+        io.out.bits.dram_block_size_bytes := io.in.bits.lhs_l0_per_l1 * io.in.bits.dpa_z_bytes
+        io.out.bits.dram_block_count :=  io.in.bits.lhs_bytes_per_l2 / (io.in.bits.lhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+        when(
+          io.in.bits.dram_block_size_bytes === io.in.bits.dram_block_offset_bytes
+        ) {
+          io.out.bits.dram_block_size_bytes := io.in.bits.dram_block_size_bytes * io.in.bits.lhs_bytes_per_l2 / (io.in.bits.lhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+          io.out.bits.dram_block_offset_bytes := io.in.bits.dram_block_offset_bytes * io.in.bits.lhs_bytes_per_l2 / (io.in.bits.lhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+          io.out.bits.dram_block_count := 1.U
+        }
       }.elsewhen(is_rhs === 1.U) {
         io.out.valid := true.B
         io.out.bits.bram_addr_base := current_bram_region * rhs_l0_per_bram.U * exec_to_fetch_width_ratio.U
         io.out.bits.bram_id_start := myP.numRHSMems.U
         io.out.bits.bram_id_range := (myP.numRHSMems - 1).U
-
         io.out.bits.dram_base := io.in.bits.dram_base_rhs + rhs_l2 * io.in.bits.z_l2_per_matrix * io.in.bits.rhs_bytes_per_l2 + z_l2 * io.in.bits.dram_block_size_bytes
+        io.out.bits.dram_block_size_bytes := io.in.bits.rhs_l0_per_l1 * io.in.bits.dpa_z_bytes
+        io.out.bits.dram_block_count := io.in.bits.rhs_bytes_per_l2 / (io.in.bits.rhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+
+        when(
+          io.in.bits.dram_block_size_bytes === io.in.bits.dram_block_offset_bytes
+        ) {
+          io.out.bits.dram_block_size_bytes := io.in.bits.dram_block_size_bytes * io.in.bits.rhs_bytes_per_l2 / (io.in.bits.rhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+          io.out.bits.dram_block_offset_bytes := io.in.bits.dram_block_offset_bytes * io.in.bits.rhs_bytes_per_l2 / (io.in.bits.rhs_l0_per_l1 * io.in.bits.dpa_z_bytes)
+          io.out.bits.dram_block_count := 1.U
+        }
 
         current_bram_region := Mux(
           current_bram_region < (bram_regions - 1).U,
@@ -134,12 +147,16 @@ class FetchInstructionGenerator(
         }
       }
       is_rhs := is_rhs + 1.U
-    }.otherwise {
-      io.in.ready := true.B
-      
-      lhs_l2 := 0.U
-      rhs_l2 := 0.U
-      z_l2 := 0.U
     }
+  }
+
+  when(!io.in.valid) {
+    counter := 0.U
+    isHigh := false.B
+    lhs_l2 := 0.U
+    rhs_l2 := 0.U
+    z_l2 := 0.U
+    is_rhs := 0.U
+    current_bram_region := 0.U
   }
 }

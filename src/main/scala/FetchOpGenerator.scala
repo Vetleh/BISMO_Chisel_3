@@ -49,4 +49,10 @@ class FetchOpGenerator() extends Module {
       counter2 := counter2 + 1.U
     }
   }
+
+  when(!io.in.valid){
+    counter := 0.U
+    counter2 := 0.U
+    isHigh := false.B
+  }
 }
