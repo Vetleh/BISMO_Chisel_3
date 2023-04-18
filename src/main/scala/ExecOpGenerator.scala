@@ -4,7 +4,6 @@ import chisel3._
 import chisel3.util._
 
 class ExecOpGeneratorIn() extends Bundle {
-  // TODO change these sizes to something more logical
   val z_l2_per_matrix = UInt(64.W)
   val lhs_l2_per_matrix = UInt(64.W)
   val rhs_l2_per_matrix = UInt(64.W)

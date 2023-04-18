@@ -96,8 +96,8 @@ bool test_binary_onchip_onetile(
   WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
 ) {
   bool all_OK = true;
-  // vector<size_t> cols_div_factor {2, 4, 8};
   vector<size_t> cols_div_factor {2, 4, 8};
+  // vector<size_t> cols_div_factor {2};
   for(auto & col_div : cols_div_factor) {
     all_OK &= test(
       "binary_onchip_onetile_coldiv" + to_string(col_div), platform, acc,
@@ -166,8 +166,8 @@ bool test_binary_offchip_widerows_multitile(
   WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
 ) {
   bool all_OK = true;
-  vector<size_t> lr_stripes {1/*, 2, 4*/};
-  vector<size_t> z_stripes {2/*, 4*/};
+  vector<size_t> lr_stripes {1, 2, 4};
+  vector<size_t> z_stripes {2, 4};
   for(auto & lhs_stripe : lr_stripes) {
     for(auto & rhs_stripe : lr_stripes) {
       for(auto & z_stripe : z_stripes) {

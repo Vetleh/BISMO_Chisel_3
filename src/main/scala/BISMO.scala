@@ -33,8 +33,6 @@ class IntructionGenerationIterations() extends Bundle {
   val lhs_l2_per_matrix = UInt(32.W)
   val rhs_l2_per_matrix = UInt(32.W)
   val z_l2_per_matrix = UInt(32.W)
-  // TODO move this
-  val n_rows = UInt(32.W)
 }
 
 // parameters that control the accelerator instantiation
@@ -274,6 +272,7 @@ class BitSerialMatMulAccel(
   execInstructionGenerator.io.in <> io.exec_runcfg
   resultInstructionGenerator.io.in <> io.result_runcfg
 
+  // Fetch op generator
   fetchOpGenerator.io.in <> io.fetch_op
   execOpGenerator.io.in <> io.exec_op
   resultOpGenerator.io.in <> io.result_op

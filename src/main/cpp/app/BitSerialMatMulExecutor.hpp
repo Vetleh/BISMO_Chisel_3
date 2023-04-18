@@ -533,19 +533,6 @@ protected:
     }
   }
 
-  // get the pointer to the start of given result tile
-  void *get_result_tile_ptr(const size_t lhs_tile, const size_t rhs_tile)
-  {
-    uint32_t lhs_ind = m_hwcfg.dpaDimLHS * lhs_tile;
-    uint32_t rhs_ind = m_hwcfg.dpaDimRHS * rhs_tile;
-    assert(lhs_ind < lhs_eff_rows());
-    assert(rhs_ind < rhs_eff_rows());
-    size_t ind = rhs_ind * lhs_eff_rows() + lhs_ind;
-    assert((ind * sizeof(ResultType)) < resBytes());
-    uint64_t ret = (uint64_t)m_accelRes + (ind * sizeof(ResultType));
-    return (void *)ret;
-  }
-
   const size_t lhs_eff_rows()
   {
     return m_shape.lhs.nrows_a;
