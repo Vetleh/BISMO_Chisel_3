@@ -73,13 +73,7 @@ public:
     }
     // build schedule for each stage based on shape
     build_schedule_trivial();
-    // uncomment to see the generated instructions
-    // printFetchQueue();
-    // printExecQueue();
-    clear_all_queue_pointers();
-    // prepare the accelerator for operation
     m_acc->reset();
-    m_acc->init_resource_pools();
     m_acc->set_stage_enables(1, 1, 1);
   }
 
@@ -136,33 +130,22 @@ public:
 
   void run()
   {
-    clear_all_queue_pointers();
     m_acc->set_stage_enables(0, 0, 0);
-    // initial fill-up of the instruction queues
-    fill_fetch_op();
-    fill_fetch_runcfg();
-    fill_exec_op();
-    fill_exec_runcfg();
-    fill_result_op();
-    fill_result_runcfg();
+
     // start the cycle counter
     m_acc->perf_set_cc_enable(true);
     // enable all stages
     m_acc->set_stage_enables(1, 1, 1);
     // run the generated schedule -- keep pushing operands until all generated
     // instructions have been pushed
-    while (!allPushed())
-    {
-      fill_fetch_op();
-      fill_fetch_runcfg();
-      fill_exec_op();
-      fill_exec_runcfg();
-      fill_result_op();
-      fill_result_runcfg();
-    }
+
+    m_acc->do_instruction(icfg);
+
     // wait until the result stage has no instructions std::left (= all finished)
-    while (!allFinished())
+
+    while (!m_acc->allFinished())
       ;
+
     // disable all stages
     m_acc->set_stage_enables(0, 0, 0);
     // stop the cycle counter
@@ -302,9 +285,6 @@ public:
     std::cout << "(" << 100 * getWorkloadBinaryOpCount(false) / getWorkloadBinaryOpCount(true) << "%)" << std::endl;
     std::cout << "Input matrix bytes: LHS " << lhsBytes() << " RHS " << rhsBytes() << std::endl;
     std::cout << "Result matrix bytes: " << resBytes() << std::endl;
-    std::cout << "Instructions: " << m_fetch_op.size() << " fetch ";
-    std::cout << m_exec_op.size() << " execute ";
-    std::cout << m_result_op.size() << " result" << std::endl;
     std::cout << "HW input matrix buffer bytes: " << getHWBufSize() << std::endl;
     std::cout << "HW peak perf: " << getHWPeakBinaryGOPS() << " binary GOPS" << std::endl;
     std::cout << "HW fclk: " << m_acc->fclk_MHz() << " MHz" << std::endl;
@@ -380,6 +360,7 @@ protected:
   uint32_t m_exec_cstate_cycles[N_CTRL_STATES];
   uint32_t m_result_cstate_cycles[N_CTRL_STATES];
   uint32_t m_bytes_to_fetch, m_bytes_to_write;
+  InstructionCfg icfg;
 
   gemmbitserial::GEMMContext m_shape;
   BitSerialMatMulAccelDriver *m_acc;
@@ -390,123 +371,11 @@ protected:
   void *m_accelRHS;
   void *m_accelRes;
 
-  std::vector<ExecOp> m_exec_op;
-  std::vector<FetchOp> m_fetch_op;
-  std::vector<ResultOp> m_result_op;
-  std::vector<FetchRunCfg> m_fetch_runcfg;
-  std::vector<ExecRunCfg> m_exec_runcfg;
-  std::vector<ResultRunCfg> m_result_runcfg;
-  size_t m_fetch_op_ptr, m_result_op_ptr, m_exec_op_ptr;
-  size_t m_fetch_runcfg_ptr, m_result_runcfg_ptr, m_exec_runcfg_ptr;
-
   // keep track of what we have in the on-chip memory to avoid re-fetching
   std::vector<uint64_t> m_cached_lhs, m_cached_rhs;
 
-  void makeinstr_fetch_run(FetchRunCfg r)
-  {
-    m_acc->verifyFetchRunCfg(r);
-    m_fetch_runcfg.push_back(r);
-  }
-
-  void makeop_fetch_run(FetchOp fo)
-  {
-    m_fetch_op.push_back(fo);
-  }
-
-  void makeinstr_exec_run(ExecRunCfg r)
-  {
-    m_exec_runcfg.push_back(r);
-  }
-
-  void makeop_exec_run(ExecOp eo)
-  {
-    m_exec_op.push_back(eo);
-  }
-
-  void makeinstr_result_run(ResultRunCfg rrc)
-  {
-    // ensure generated runcfg for result is valid
-    m_acc->verifyResultRunCfg(rrc);
-    // count result bytes for statistics
-    m_bytes_to_write += m_hwcfg.dpaDimLHS * m_hwcfg.dpaDimRHS * sizeof(ResultType);
-    // m_result_op.push_back(m_acc->make_op(opRun, 0));
-    m_result_runcfg.push_back(rrc);
-  }
-
-  void makeop_result_run(ResultOp ro)
-  {
-    m_result_op.push_back(ro);
-  }
-
-  void clear_all_queue_pointers()
-  {
-    // set queue pointers to zero
-    m_fetch_op_ptr = m_result_op_ptr = m_exec_op_ptr = 0;
-    m_fetch_runcfg_ptr = m_result_runcfg_ptr = m_exec_runcfg_ptr = 0;
-  }
-
   // whether all instruction execution has finished
   // = no instrs in result queue and all instrs pushed to queue
-  bool allFinished()
-  {
-    return m_acc->res_opcount() == 0 && m_result_op_ptr == m_result_op.size();
-  }
-
-  // whether all instructions have been pushed to the queuesm_fetch_op
-  bool allPushed()
-  {
-    return m_fetch_op_ptr == m_fetch_op.size() &&
-           m_exec_op_ptr == m_exec_op.size() &&
-           m_result_op_ptr == m_result_op.size();
-  }
-
-  void fill_fetch_op()
-  {
-    while (!m_acc->fetch_op_full() && m_fetch_op_ptr < m_fetch_op.size())
-    {
-      m_acc->push_fetch_op(m_fetch_op[m_fetch_op_ptr++]);
-    }
-  }
-
-  void fill_exec_op()
-  {
-    while (!m_acc->exec_op_full() && m_exec_op_ptr < m_exec_op.size())
-    {
-      m_acc->push_exec_op(m_exec_op[m_exec_op_ptr++]);
-    }
-  }
-
-  void fill_result_op()
-  {
-    while (!m_acc->result_op_full() && m_result_op_ptr < m_result_op.size())
-    {
-      m_acc->push_result_op(m_result_op[m_result_op_ptr++]);
-    }
-  }
-
-  void fill_fetch_runcfg()
-  {
-    while (!m_acc->fetch_runcfg_full() && m_fetch_runcfg_ptr < m_fetch_runcfg.size())
-    {
-      m_acc->push_fetch_runcfg(m_fetch_runcfg[m_fetch_runcfg_ptr++]);
-    }
-  }
-
-  void fill_exec_runcfg()
-  {
-    while (!m_acc->exec_runcfg_full() && m_exec_runcfg_ptr < m_exec_runcfg.size())
-    {
-      m_acc->push_exec_runcfg(m_exec_runcfg[m_exec_runcfg_ptr++]);
-    }
-  }
-
-  void fill_result_runcfg()
-  {
-    while (!m_acc->result_runcfg_full() && m_result_runcfg_ptr < m_result_runcfg.size())
-    {
-      m_acc->push_result_runcfg(m_result_runcfg[m_result_runcfg_ptr++]);
-    }
-  }
 
   void updateFetchStateCounters()
   {
@@ -612,72 +481,66 @@ protected:
     const uint64_t fetch_base_rhs = (uint64_t)m_accelRHS;
     uint64_t res_base = (uint64_t)m_accelRes;
 
-    FetchRunCfg frc = {
-        .dram_base_rhs = (void *)fetch_base_rhs,
-        .dram_base_lhs = (void *)fetch_base_lhs,
-        .dram_block_offset_bytes = (lhs.ncols_a / 8),
-        .dram_block_size_bytes = lhs_l0_per_l1 * dpa_z_bytes,
-        .dram_block_count = lhs_bytes_per_l2 / (lhs_l0_per_l1 * dpa_z_bytes),
-        .tiles_per_row = lhs_l0_per_l1 * exec_to_fetch_width_ratio,
-        .z_l2_per_matrix = z_l2_per_matrix,
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .lhs_bytes_per_l2 = lhs_bytes_per_l2,
-        .rhs_bytes_per_l2 = rhs_bytes_per_l2,
-        .dpa_z_bytes = dpa_z_bytes,
-        .lhs_l0_per_l1 = lhs_l0_per_l1,
-        .rhs_l0_per_l1 = rhs_l0_per_l1};
+    icfg = {
+        // Fetch
+        .fetch_dram_base_rhs = (void *)fetch_base_rhs,
+        .fetch_dram_base_lhs = (void *)fetch_base_lhs,
+        .dram_block_offset_bytes = (uint32_t)(lhs.ncols_a / 8),
+        .dram_block_size_bytes = (uint32_t)lhs_l0_per_l1 * dpa_z_bytes,
+        .dram_block_count = (uint32_t)(lhs_bytes_per_l2 / (lhs_l0_per_l1 * dpa_z_bytes)),
+        .tiles_per_row = (uint32_t)(lhs_l0_per_l1 * exec_to_fetch_width_ratio),
+        // Exec
+        .num_tiles = (uint32_t)lhs_l0_per_l1,
+        .shift_amount = 0,
+        .negate = 0,
 
-    makeinstr_fetch_run(frc);
-
-    FetchOp fo = {
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .z_l2_per_matrix = z_l2_per_matrix};
-
-    makeop_fetch_run(fo);
-
-    ExecRunCfg erc = {
-        .doNegate = 0,
-        .numTiles = lhs_l0_per_l1,
-        .shiftAmount = 0,
-        .lhs_l1_per_l2 = lhs_l1_per_l2,
-        .rhs_l1_per_l2 = rhs_l1_per_l2,
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .z_l2_per_matrix = z_l2_per_matrix};
-
-    makeinstr_exec_run(erc);
-
-    ExecOp eo = {
-        .z_l2_per_matrix = z_l2_per_matrix,
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .lhs_l1_per_l2 = lhs_l1_per_l2,
-        .rhs_l1_per_l2 = rhs_l1_per_l2};
-
-    makeop_exec_run(eo);
-
-    ResultRunCfg rrc = {
-        .dram_base = (void *)res_base,
+        // Res
+        .res_dram_base = (void *)res_base,
         .dram_skip = lhs_eff_rows() * sizeof(ResultType),
-        .lhs_l1_per_l2 = lhs_l1_per_l2,
-        .rhs_l1_per_l2 = rhs_l1_per_l2,
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .z_l2_per_matrix = z_l2_per_matrix,
-        .nrows_a = lhs_eff_rows(),
         .wait_complete_bytes = resBytes(),
+
+        .z_l2_per_matrix = (uint32_t)z_l2_per_matrix,
+        .lhs_l2_per_matrix = (uint32_t)lhs_l2_per_matrix,
+        .rhs_l2_per_matrix = (uint32_t)rhs_l2_per_matrix,
+        .lhs_bytes_per_l2 = (uint32_t)lhs_bytes_per_l2,
+        .rhs_bytes_per_l2 = (uint32_t)rhs_bytes_per_l2,
+        .dpa_z_bytes = dpa_z_bytes,
+        .lhs_l0_per_l1 = (uint32_t)lhs_l0_per_l1,
+        .rhs_l0_per_l1 = (uint32_t)rhs_l0_per_l1,
+        .lhs_l1_per_l2 = (uint32_t)lhs_l1_per_l2,
+        .rhs_l1_per_l2 = (uint32_t)rhs_l1_per_l2,
+        .nrows_a = (uint32_t)lhs_eff_rows(),
     };
 
-    makeinstr_result_run(rrc);
+    for(int lhs_l2 = 0; lhs_l2 < lhs_l2_per_matrix; lhs_l2++) {
+      for(int rhs_l2 = 0; rhs_l2 < rhs_l2_per_matrix; rhs_l2++) {
+        for(int z_l2 = 0; z_l2 < z_l2_per_matrix; z_l2++) {
+          void * lhs_dram_base = (void *)(fetch_base_lhs + lhs_l2*z_l2_per_matrix*lhs_bytes_per_l2 + z_l2 * lhs_l0_per_l1 * dpa_z_bytes);
+          void * rhs_dram_base = (void *)(fetch_base_rhs + rhs_l2*z_l2_per_matrix*rhs_bytes_per_l2 + z_l2 * rhs_l0_per_l1 * dpa_z_bytes);
+          // only issue fetch if not already in cache
+          if(m_cached_lhs[current_bram_region] != (uint64_t) lhs_dram_base) {
+            m_bytes_to_fetch += lhs_bytes_per_l2;
+            m_cached_lhs[current_bram_region] = (uint64_t) lhs_dram_base;
+          }
 
-    ResultOp ro = {
-        .lhs_l2_per_matrix = lhs_l2_per_matrix,
-        .rhs_l2_per_matrix = rhs_l2_per_matrix,
-        .lhs_l1_per_l2 = lhs_l1_per_l2,
-        .rhs_l1_per_l2 = rhs_l1_per_l2};
+          // only issue fetch if not already in cache
+          if(m_cached_rhs[current_bram_region] != (uint64_t) rhs_dram_base) {
+            m_bytes_to_fetch += rhs_bytes_per_l2;
+            m_cached_rhs[current_bram_region] = (uint64_t) rhs_dram_base;
+          }
 
-    makeop_result_run(ro);
+          // process combinations of L1 tiles within the L2 tile
+          for(int lhs_l1 = 0; lhs_l1 < lhs_l1_per_l2; lhs_l1++) {
+            for(int rhs_l1 = 0; rhs_l1 < rhs_l1_per_l2; rhs_l1++) {
+              if(z_l2 == z_l2_per_matrix - 1) {
+                m_bytes_to_write += m_hwcfg.dpaDimLHS * m_hwcfg.dpaDimRHS * sizeof(ResultType);
+                current_resmem_region = current_resmem_region < resmem_regions-1 ? current_resmem_region + 1 : 0;
+              }
+            }
+          }
+          current_bram_region = current_bram_region < bram_regions-1 ? current_bram_region + 1 : 0;
+        }
+      }
+    }
   }
 };

@@ -49,12 +49,7 @@
 #define max(x, y) (x > y ? x : y)
 #define FETCH_ALIGN max(FETCH_ADDRALIGN, FETCH_SIZEALIGN)
 
-typedef enum
-{
-  opRun = 0,
-  opSendToken,
-  opReceiveToken
-} OpCode;
+
 
 typedef enum
 {
@@ -66,18 +61,24 @@ typedef enum
 
 typedef struct
 {
-  OpCode opcode;
-  uint32_t syncChannel;
-} Op;
-
-typedef struct
-{
-  void *dram_base_rhs;
-  void *dram_base_lhs;
+  // Fetch
+  void *fetch_dram_base_rhs;
+  void *fetch_dram_base_lhs;
   uint32_t dram_block_offset_bytes;
   uint32_t dram_block_size_bytes;
   uint32_t dram_block_count;
   uint32_t tiles_per_row;
+
+  // Exec
+  uint32_t num_tiles;
+  uint32_t shift_amount;
+  uint32_t negate;
+
+  // Res
+  void *res_dram_base;
+  uint64_t dram_skip;
+  uint64_t wait_complete_bytes;
+
   uint32_t z_l2_per_matrix;
   uint32_t lhs_l2_per_matrix;
   uint32_t rhs_l2_per_matrix;
@@ -86,56 +87,10 @@ typedef struct
   uint32_t dpa_z_bytes;
   uint32_t lhs_l0_per_l1;
   uint32_t rhs_l0_per_l1;
-} FetchRunCfg;
-
-typedef struct
-{
-  uint32_t lhs_l2_per_matrix;
-  uint32_t rhs_l2_per_matrix;
-  uint32_t z_l2_per_matrix;
-} FetchOp;
-
-typedef struct
-{
-  uint32_t doNegate;
-  uint32_t numTiles;
-  uint32_t shiftAmount;
   uint32_t lhs_l1_per_l2;
   uint32_t rhs_l1_per_l2;
-  uint32_t lhs_l2_per_matrix;
-  uint32_t rhs_l2_per_matrix;
-  uint32_t z_l2_per_matrix;
-} ExecRunCfg;
-
-typedef struct
-{
-  uint32_t z_l2_per_matrix;
-  uint32_t lhs_l2_per_matrix;
-  uint32_t rhs_l2_per_matrix;
-  uint32_t lhs_l1_per_l2;
-  uint32_t rhs_l1_per_l2;
-} ExecOp;
-
-typedef struct
-{
-  void *dram_base;
-  uint64_t dram_skip;
-  uint32_t lhs_l1_per_l2;
-  uint32_t rhs_l1_per_l2;
-  uint32_t lhs_l2_per_matrix;
-  uint32_t rhs_l2_per_matrix;
-  uint32_t z_l2_per_matrix;
   uint32_t nrows_a;
-  uint32_t wait_complete_bytes;
-} ResultRunCfg;
-
-typedef struct
-{
-  uint32_t lhs_l2_per_matrix;
-  uint32_t rhs_l2_per_matrix;
-  uint32_t lhs_l1_per_l2;
-  uint32_t rhs_l1_per_l2;
-} ResultOp;
+} InstructionCfg;
 
 typedef struct
 {
@@ -171,17 +126,17 @@ public:
 
   void measure_fclk()
   {
-    if (m_platform->platformID() != "EmuDriver")
-    {
-      uint32_t cc_start = perf_get_cc();
-      perf_set_cc_enable(true);
-      // sleep for one second of CPU time
-      usleep(1000000);
-      perf_set_cc_enable(false);
-      uint32_t cc_end = perf_get_cc();
-      // million ticks per second = fclk in MHz
-      m_fclk = (float)(cc_end - cc_start) / 1000000.0;
-    }
+    // if (m_platform->platformID() != "EmuDriver")
+    // {
+    //   uint32_t cc_start = perf_get_cc();
+    //   perf_set_cc_enable(true);
+    //   // sleep for one second of CPU time
+    //   usleep(1000000);
+    //   perf_set_cc_enable(false);
+    //   uint32_t cc_end = perf_get_cc();
+    //   // million ticks per second = fclk in MHz
+    //   m_fclk = (float)(cc_end - cc_start) / 1000000.0;
+    // }
   }
 
   float fclk_MHz() const
@@ -241,32 +196,9 @@ public:
     return m_accel->get_perf_prf_res_count();
   }
 
-  static void printFetchRunCfg(FetchRunCfg r)
+  static void printInstruction(InstructionCfg r)
   {
-    cout << "FetchRunCfg ============================" << endl;
-    // cout << "bram_addr_base: " << r.bram_addr_base << endl;
-    // cout << "bram_id_start: " << r.bram_id_start << endl;
-    // cout << "bram_id_range: " << r.bram_id_range << endl;
-    cout << "tiles_per_row: " << r.tiles_per_row << endl;
-    // cout << "dram_base: " << (uint64_t) r.dram_base << endl;
-    cout << "dram_block_offset_bytes: " << r.dram_block_offset_bytes << endl;
-    cout << "dram_block_size_bytes: " << r.dram_block_size_bytes << endl;
-    cout << "dram_block_count: " << r.dram_block_count << endl;
-    cout << "========================================" << endl;
-  }
-
-  static void printExecRunCfg(ExecRunCfg r)
-  {
-    cout << "ExecRunCfg ============================" << endl;
-    // cout << "lhsOffset: " << r.lhsOffset << endl;
-    // cout << "rhsOffset: " << r.rhsOffset << endl;
-    cout << "doNegate: " << r.doNegate << endl;
-    cout << "numTiles: " << r.numTiles << endl;
-    cout << "shiftAmount: " << r.shiftAmount << endl;
-    // cout << "doClear: " << r.doClear << endl;
-    // cout << "writeEn: " << r.writeEn << endl;
-    // cout << "writeAddr: " << r.writeAddr << endl;
-    cout << "========================================" << endl;
+    // TODO fix this for debuging
   }
 
   const size_t get_lhs_total_BRAM_bytes()
@@ -294,34 +226,6 @@ public:
     return m_cfg.dpaDimLHS;
   }
 
-  // do a sanity check on a FetchRunCfg in terms of alignment and
-  // out-of-bounds values
-  void verifyFetchRunCfg(FetchRunCfg f)
-  {
-    // const size_t exec_to_fetch_width_ratio = m_cfg.dpaDimCommon / m_cfg.readChanWidth;
-    // // ensure all DRAM accesses are aligned
-    // assert(((uint64_t) f.dram_base) % FETCH_ADDRALIGN == 0);
-    // assert(f.dram_block_offset_bytes % FETCH_ADDRALIGN == 0);
-    // assert(f.dram_block_size_bytes % FETCH_SIZEALIGN == 0);
-    // // ensure that BRAM accesses are within existing range
-    // assert(f.bram_id_start < get_fetch_nodes_per_group());
-    // assert(f.bram_id_start + f.bram_id_range < get_fetch_nodes_per_group());
-    // if(f.bram_id_start < get_fetch_first_rhs_id()) {
-    //   assert(f.bram_addr_base < m_cfg.lhsEntriesPerMem * exec_to_fetch_width_ratio);
-    // } else {
-    //   assert(f.bram_addr_base < m_cfg.rhsEntriesPerMem * exec_to_fetch_width_ratio);
-    // }
-  }
-
-  // do a sanity check on a ResultRunCfg in terms of alignment and
-  // out-of-bounds values
-  void verifyResultRunCfg(ResultRunCfg r)
-  {
-    // ensure all DRAM accesses are aligned to 8 bytes
-    assert(((uint64_t)r.dram_base) % 8 == 0);
-    assert(r.dram_skip % 8 == 0);
-  }
-
   // get command counts in FIFOs
   const uint32_t fetch_opcount()
   {
@@ -337,32 +241,13 @@ public:
   }
 
   // check whether it's possible to write a new element into a queue
-  const bool fetch_op_full()
+  const bool instruction_generator_ready()
   {
-    return m_accel->get_fetch_op_ready() == 1 ? false : true;
-  }
-  const bool exec_op_full()
-  {
-    return m_accel->get_exec_op_ready() == 1 ? false : true;
-  }
-  const bool result_op_full()
-  {
-    return m_accel->get_result_op_ready() == 1 ? false : true;
-  }
-  const bool fetch_runcfg_full()
-  {
-    return m_accel->get_fetch_runcfg_ready() == 1 ? false : true;
-  }
-  const bool exec_runcfg_full()
-  {
-    return m_accel->get_exec_runcfg_ready() == 1 ? false : true;
-  }
-  const bool result_runcfg_full()
-  {
-    return m_accel->get_result_runcfg_ready() == 1 ? false : true;
+    return m_accel->get_ins_ready();
   }
 
   // reset the accelerator
+  // TODO how does this work in practise for MMIO?
   void reset()
   {
     m_platform->writeReg(0, 1);
@@ -377,141 +262,38 @@ public:
     m_accel->set_result_enable(result);
   }
 
-  Op make_op(OpCode opcode, uint32_t syncChannel)
+  // TODO push instruction generation stuff
+  void do_instruction(InstructionCfg icfg)
   {
-    Op ret;
-    ret.opcode = opcode;
-    ret.syncChannel = syncChannel;
-    return ret;
+    m_accel->set_ins_bits_dpa_z_bytes(icfg.dpa_z_bytes);
+    m_accel->set_ins_bits_nrows_a(icfg.nrows_a);
+    m_accel->set_ins_bits_rhs_bytes_per_l2(icfg.rhs_bytes_per_l2);
+    m_accel->set_ins_bits_lhs_bytes_per_l2(icfg.lhs_bytes_per_l2);
+    m_accel->set_ins_bits_z_l2_per_matrix(icfg.z_l2_per_matrix);
+    m_accel->set_ins_bits_rhs_l2_per_matrix(icfg.rhs_l2_per_matrix);
+    m_accel->set_ins_bits_lhs_l2_per_matrix(icfg.lhs_l2_per_matrix);
+    m_accel->set_ins_bits_rhs_l1_per_l2(icfg.rhs_l1_per_l2);
+    m_accel->set_ins_bits_lhs_l1_per_l2(icfg.lhs_l1_per_l2);
+    m_accel->set_ins_bits_rhs_l0_per_l1(icfg.rhs_l0_per_l1);
+    m_accel->set_ins_bits_lhs_l0_per_l1(icfg.lhs_l0_per_l1);
+    m_accel->set_ins_bits_wait_complete_bytes(icfg.wait_complete_bytes);
+    m_accel->set_ins_bits_dram_skip(icfg.dram_skip);
+    m_accel->set_ins_bits_dram_base((uint64_t) icfg.res_dram_base);
+    m_accel->set_ins_bits_negate(icfg.negate);
+    m_accel->set_ins_bits_shiftAmount(icfg.shift_amount);
+    m_accel->set_ins_bits_numTiles(icfg.num_tiles);
+    m_accel->set_ins_bits_tiles_per_row(icfg.tiles_per_row);
+    m_accel->set_ins_bits_dram_block_count(icfg.dram_block_count);
+    m_accel->set_ins_bits_dram_block_size_bytes(icfg.dram_block_size_bytes);
+    m_accel->set_ins_bits_dram_block_offset_bytes(icfg.dram_block_offset_bytes);
+    m_accel->set_ins_bits_dram_base_rhs((uint64_t) icfg.fetch_dram_base_rhs);
+    m_accel->set_ins_bits_dram_base_lhs((uint64_t) icfg.fetch_dram_base_lhs);
+    m_accel->set_ins_valid(1);
   }
 
-  // push a command to the Fetch op queue
-  void push_fetch_op(FetchOp op)
+  bool allFinished()
   {
-    // m_accel->set_fetch_op_bits_opcode((AccelReg) op.opcode);
-    // m_accel->set_fetch_op_bits_token_channel(op.syncChannel);
-    m_accel->set_fetch_op_bits_rhs_l2_per_matrix(op.rhs_l2_per_matrix);
-    m_accel->set_fetch_op_bits_lhs_l2_per_matrix(op.lhs_l2_per_matrix);
-    m_accel->set_fetch_op_bits_z_l2_per_matrix(op.z_l2_per_matrix);
-    // push into fetch op FIFO
-    assert(!fetch_op_full());
-    m_accel->set_fetch_op_valid(1);
-    // m_accel->set_fetch_op_valid(0);
-  }
-
-  // push a command to the Exec op queue
-  void push_exec_op(ExecOp eo)
-  {
-    m_accel->set_exec_op_bits_rhs_l1_per_l2(eo.rhs_l1_per_l2);
-    m_accel->set_exec_op_bits_lhs_l1_per_l2(eo.lhs_l1_per_l2);
-    m_accel->set_exec_op_bits_rhs_l2_per_matrix(eo.rhs_l2_per_matrix);
-    m_accel->set_exec_op_bits_lhs_l2_per_matrix(eo.lhs_l2_per_matrix);
-    m_accel->set_exec_op_bits_z_l2_per_matrix(eo.z_l2_per_matrix);
-    // push into exec op FIFO
-    assert(!exec_op_full());
-    m_accel->set_exec_op_valid(1);
-    // m_accel->set_exec_op_valid(0);
-  }
-
-  // push a command to the Result op queue
-  void push_result_op(ResultOp ro)
-  {
-    m_accel->set_result_op_bits_rhs_l1_per_l2(ro.rhs_l1_per_l2);
-    m_accel->set_result_op_bits_lhs_l1_per_l2(ro.lhs_l1_per_l2);
-    m_accel->set_result_op_bits_rhs_l2_per_matrix(ro.rhs_l2_per_matrix);
-    m_accel->set_result_op_bits_lhs_l2_per_matrix(ro.lhs_l2_per_matrix);
-    // // push into result op FIFO
-    m_accel->set_result_op_valid(1);
-    // m_accel->set_result_op_valid(0);
-  }
-
-  // push a command to the Fetch runcfg queue
-  void push_fetch_runcfg(FetchRunCfg cfg)
-  {
-    // set up all the fields for the runcfg
-    m_accel->set_fetch_runcfg_bits_rhs_bytes_per_l2(cfg.rhs_bytes_per_l2);
-    m_accel->set_fetch_runcfg_bits_lhs_bytes_per_l2(cfg.lhs_bytes_per_l2);
-    m_accel->set_fetch_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
-    m_accel->set_fetch_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
-    m_accel->set_fetch_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
-    m_accel->set_fetch_runcfg_bits_dram_base_lhs((AccelDblReg)cfg.dram_base_lhs);
-    m_accel->set_fetch_runcfg_bits_dram_base_rhs((AccelDblReg)cfg.dram_base_rhs);
-    m_accel->set_fetch_runcfg_bits_dram_block_offset_bytes(cfg.dram_block_offset_bytes);
-    m_accel->set_fetch_runcfg_bits_dram_block_size_bytes(cfg.dram_block_size_bytes);
-    m_accel->set_fetch_runcfg_bits_dram_block_count(cfg.dram_block_count);
-    m_accel->set_fetch_runcfg_bits_dpa_z_bytes(cfg.dpa_z_bytes);
-    m_accel->set_fetch_runcfg_bits_lhs_l0_per_l1(cfg.lhs_l0_per_l1);
-    m_accel->set_fetch_runcfg_bits_rhs_l0_per_l1(cfg.rhs_l0_per_l1);
-
-    // hw limitation: tiles_per_row is internally 16 bits
-    assert(cfg.tiles_per_row < (1 << 16));
-    m_accel->set_fetch_runcfg_bits_tiles_per_row(cfg.tiles_per_row);
-    // push to runcfg FIFO
-    assert(!fetch_runcfg_full());
-    m_accel->set_fetch_runcfg_valid(1);
-  }
-
-  // push a command to the Exec runcfg queue
-  void push_exec_runcfg(ExecRunCfg cfg)
-  {
-    // set up all the fields for the runcfg
-    m_accel->set_exec_runcfg_bits_negate(cfg.doNegate);
-    m_accel->set_exec_runcfg_bits_numTiles(cfg.numTiles);
-    m_accel->set_exec_runcfg_bits_shiftAmount(cfg.shiftAmount);
-    m_accel->set_exec_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
-    m_accel->set_exec_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
-    m_accel->set_exec_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
-    m_accel->set_exec_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2);
-    m_accel->set_exec_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
-
-    assert(!exec_runcfg_full());
-    // push to runcfg FIFO
-    m_accel->set_exec_runcfg_valid(1);
-  }
-
-  // push a command to the Result runcfg queue
-  void push_result_runcfg(ResultRunCfg cfg)
-  {
-    // set up all the fields for the command
-    m_accel->set_result_runcfg_bits_dram_base((AccelDblReg)cfg.dram_base);
-    m_accel->set_result_runcfg_bits_dram_skip(cfg.dram_skip);
-    m_accel->set_result_runcfg_bits_wait_complete_bytes(cfg.wait_complete_bytes);
-    // m_accel->set_result_runcfg_bits_resmem_addr(cfg.resmem_addr);
-    // m_accel->set_result_runcfg_bits_waitComplete(cfg.waitComplete ? 1 : 0);
-    // m_accel->set_result_runcfg_bits_waitCompleteBytes(cfg.waitCompleteBytes);
-    m_accel->set_result_runcfg_bits_z_l2_per_matrix(cfg.z_l2_per_matrix);
-    m_accel->set_result_runcfg_bits_rhs_l2_per_matrix(cfg.rhs_l2_per_matrix);
-    m_accel->set_result_runcfg_bits_lhs_l2_per_matrix(cfg.lhs_l2_per_matrix);
-    m_accel->set_result_runcfg_bits_rhs_l1_per_l2(cfg.rhs_l1_per_l2);
-    m_accel->set_result_runcfg_bits_lhs_l1_per_l2(cfg.lhs_l1_per_l2);
-    m_accel->set_result_runcfg_bits_nrows_a(cfg.nrows_a);
-
-    // push to runcfg FIFO
-    assert(!result_runcfg_full());
-    m_accel->set_result_runcfg_valid(1);
-  }
-
-  // initialize the tokens in FIFOs representing shared resources
-  void init_resource_pools()
-  {
-    set_stage_enables(0, 0, 0);
-    // for(int i = 0; i < FETCHEXEC_TOKENS; i++) {
-    //   push_exec_op(make_op(opSendToken, 0));
-    // }
-    // assert(m_accel->get_exec_op_count() == FETCHEXEC_TOKENS);
-    set_stage_enables(0, 1, 0);
-    while (m_accel->get_exec_op_count() != 0)
-      ;
-
-    set_stage_enables(0, 0, 0);
-    // for(int i = 0; i < EXECRES_TOKENS; i++) {
-    //   push_result_op(make_op(opSendToken, 0));
-    // }
-    // assert(m_accel->get_result_op_count() == EXECRES_TOKENS);
-    set_stage_enables(0, 0, 1);
-    while (m_accel->get_result_op_count() != 0)
-      ;
-    set_stage_enables(0, 0, 0);
+    return m_accel->get_result_op_count() == 0 && m_accel->get_exec_op_count() == 0 && m_accel->get_fetch_op_count() == 0;
   }
 
   // get the instantiated hardware config
@@ -522,13 +304,7 @@ public:
 
   void reset_generators()
   {
-    m_accel->set_exec_op_valid(0);
-    m_accel->set_result_op_valid(0);
-    m_accel->set_fetch_op_valid(0);
-
-    m_accel->set_fetch_runcfg_valid(0);
-    m_accel->set_exec_runcfg_valid(0);
-    m_accel->set_result_runcfg_valid(0);
+    m_accel->set_ins_valid(0);
   }
 
   // print a summary of the hardware config

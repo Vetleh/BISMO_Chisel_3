@@ -35,8 +35,6 @@ class ResultInstructionGenerator(
 
   val io = IO(new ResultInstructionGeneratorIO(myP))
   def get_result_tile_ptr(lhs_tile: UInt, rhs_tile: UInt): UInt = {
-    // val lhs_ind = dpaDimLHS.U * lhs_tile
-    // val rhs_ind = dpaDimRHS.U * rhs_tile
     // May want result type to be something else than 32
     return io.in.bits.dram_base + (dpaDimRHS.U * rhs_tile * io.in.bits.nrows_a + dpaDimLHS.U * lhs_tile) * 4.U
   }
@@ -58,7 +56,6 @@ class ResultInstructionGenerator(
 
   val isHigh = RegInit(Bool(), false.B)
 
-  // TODO total iters are wrong
   val total_iters =
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.lhs_l1_per_l2 * io.in.bits.rhs_l1_per_l2
 

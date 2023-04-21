@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 
 class FetchInstructionGeneratorIn() extends Bundle {
+  // TODO can any of the be calculated from hw?
   val dram_base_lhs = UInt(64.W)
   val dram_base_rhs = UInt(64.W)
   val dram_block_offset_bytes = UInt(32.W)
@@ -27,7 +28,6 @@ class FetchInstructionGeneratorIn() extends Bundle {
 class FetchInstructionGeneratorIO(myP: FetchStageParams) extends Bundle {
   val in = Flipped(Decoupled(new FetchInstructionGeneratorIn()))
   val out = Decoupled(new FetchStageCtrlIO(myP))
-  // val out_op = Decoupled(new ControllerCmd(1, 1))
 }
 
 class FetchInstructionGenerator(

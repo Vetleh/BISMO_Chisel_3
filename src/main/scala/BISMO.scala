@@ -26,13 +26,39 @@ class BitSerialMatMulHWCfg(bitsPerField: Int) extends Bundle {
   val cmdQueueEntries = UInt(bitsPerField.W)
 }
 
-class IntructionGenerationIterations() extends Bundle {
+class InstructionGenerationParams(myP: BitSerialMatMulParams) extends Bundle {
+  // Fetch instructions
+  val dram_base_lhs = UInt(64.W)
+  val dram_base_rhs = UInt(64.W)
+  val dram_block_offset_bytes = UInt(32.W)
+  val dram_block_size_bytes = UInt(32.W)
+  val dram_block_count = UInt(32.W)
+  val tiles_per_row = UInt(16.W)
+
+  // Exec instructions
+  val numTiles = UInt(32.W)
+  val shiftAmount = UInt(log2Up(myP.dpaParams.dpuParams.maxShiftSteps + 1).W)
+  val negate = Bool()
+
+  // Result instructions
+  val dram_base = UInt(64.W)
+  val dram_skip = UInt(64.W)
+  val wait_complete_bytes = UInt(64.W)
+
+  // Loop iteration variables
+  val lhs_l0_per_l1 = UInt(64.W)
+  val rhs_l0_per_l1 = UInt(64.W)
   val lhs_l1_per_l2 = UInt(32.W)
   val rhs_l1_per_l2 = UInt(32.W)
-
   val lhs_l2_per_matrix = UInt(32.W)
   val rhs_l2_per_matrix = UInt(32.W)
   val z_l2_per_matrix = UInt(32.W)
+  val lhs_bytes_per_l2 = UInt(64.W)
+  val rhs_bytes_per_l2 = UInt(64.W)
+
+  val nrows_a = UInt(32.W)
+  val dpa_z_bytes = UInt(64.W)
+
 }
 
 // parameters that control the accelerator instantiation
@@ -187,23 +213,8 @@ class BitSerialMatMulAccel(
     val result_enable = Input(Bool())
 
     // op queues
-    val fetch_op = Flipped(Decoupled(new FetchOpGeneratorIn()))
-    val exec_op = Flipped(Decoupled(new ExecOpGeneratorIn()))
-    val result_op = Flipped(Decoupled(new ResultOpGeneratorIn()))
-    // config for run ops
-    val fetch_runcfg = Flipped(
-      Decoupled(
-        new FetchInstructionGeneratorIn()
-      )
-    )
-    val exec_runcfg = Flipped(
-      Decoupled(new ExecInstructionGeneratorIn(myP.execStageParams))
-    )
-    val result_runcfg = Flipped(
-      Decoupled(
-        new ResultInstructionGeneratorIn()
-      )
-    )
+    val ins = Flipped(Decoupled(new InstructionGenerationParams(myP)))
+
     // command counts in each queue
     val fetch_op_count = Output(UInt(32.W))
     val exec_op_count = Output(UInt(32.W))
@@ -264,18 +275,31 @@ class BitSerialMatMulAccel(
   )
 
   // Wire up generators
-  // fetchInstructionGenerator.io.in <> io.fetch_runcfg
-  // execInstructionGenerator.io.in <> io.exec_runcfg
 
   // Wire up result instruction generator
-  fetchInstructionGenerator.io.in <> io.fetch_runcfg
-  execInstructionGenerator.io.in <> io.exec_runcfg
-  resultInstructionGenerator.io.in <> io.result_runcfg
+  fetchInstructionGenerator.io.in.valid := io.ins.valid
+  fetchInstructionGenerator.io.in.bits := io.ins.bits
+
+  execInstructionGenerator.io.in.valid := io.ins.valid
+  execInstructionGenerator.io.in.bits := io.ins.bits
+
+  resultInstructionGenerator.io.in.valid := io.ins.valid
+  resultInstructionGenerator.io.in.bits := io.ins.bits
 
   // Fetch op generator
-  fetchOpGenerator.io.in <> io.fetch_op
-  execOpGenerator.io.in <> io.exec_op
-  resultOpGenerator.io.in <> io.result_op
+  fetchOpGenerator.io.in.valid := io.ins.valid
+  fetchOpGenerator.io.in.bits := io.ins.bits
+
+  // Exec op generator
+  execOpGenerator.io.in.valid := io.ins.valid
+  execOpGenerator.io.in.bits := io.ins.bits
+
+  // Result op generator
+  resultOpGenerator.io.in.valid := io.ins.valid
+  resultOpGenerator.io.in.bits := io.ins.bits
+
+  // Only ready when all generators are ready
+  io.ins.ready := fetchOpGenerator.io.in.ready && execOpGenerator.io.in.ready && resultOpGenerator.io.in.ready && fetchInstructionGenerator.io.in.ready && execInstructionGenerator.io.in.ready && resultInstructionGenerator.io.in.ready
 
   // instantiate accelerator stages
   val fetchStage = Module(new FetchStage(myP.fetchStageParams)).io
@@ -288,10 +312,16 @@ class BitSerialMatMulAccel(
   val resultCtrl = Module(new ResultController(myP.resultStageParams)).io
   // instantiate op and runcfg queues
   val fetchOpQ = Module(
-    new FPGAQueue(chiselTypeOf(fetchOpGenerator.io.out.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(fetchOpGenerator.io.out.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   val execOpQ = Module(
-    new FPGAQueue(chiselTypeOf(execOpGenerator.io.out.bits), myP.cmdQueueEntries)
+    new FPGAQueue(
+      chiselTypeOf(execOpGenerator.io.out.bits),
+      myP.cmdQueueEntries
+    )
   ).io
   val resultOpQ = Module(
     new FPGAQueue(

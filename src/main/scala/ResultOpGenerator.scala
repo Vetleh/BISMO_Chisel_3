@@ -28,8 +28,10 @@ class ResultOpGenerator() extends Module {
   io.out.valid := false.B
   io.out.bits.opcode := 0.U
   io.out.bits.token_channel := 0.U
+
   val total_iters =
     io.in.bits.lhs_l2_per_matrix * io.in.bits.rhs_l2_per_matrix * io.in.bits.lhs_l1_per_l2 * io.in.bits.rhs_l1_per_l2
+
   io.in.ready := true.B
   when(isHigh && io.in.valid && io.out.ready) {
     isHigh := false.B
