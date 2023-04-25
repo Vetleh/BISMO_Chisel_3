@@ -34,9 +34,9 @@
 
 #include <cassert>
 #include <unistd.h>
-#include "platform.h"
-#include "BitSerialMatMulAccel.hpp"
 #include <iostream>
+#include <fstream>
+#include "BitSerialMatMulAccel.hpp"
 #include "gemmbitserial/gemmbitserial.hpp"
 
 #define CMDFIFO_CAP 16
@@ -46,10 +46,8 @@
 #define FETCH_ADDRALIGN 64
 #define FETCH_SIZEALIGN 8
 
-#define max(x, y) (x > y ? x : y)
+// #define max(x, y) (x > y ? x : y)
 #define FETCH_ALIGN max(FETCH_ADDRALIGN, FETCH_SIZEALIGN)
-
-
 
 typedef enum
 {
@@ -106,16 +104,60 @@ typedef struct
   uint32_t writeChanWidth;
 } HardwareCfg;
 
+typedef struct
+{
+  string test_name;
+  uint64_t tot_workload;
+  uint64_t act_workload;
+  uint64_t input_bytes_lhs;
+  uint64_t input_bytes_rhs;
+  uint64_t res_bytes;
+  uint64_t instr_amount_fetch;
+  uint64_t instr_amount_exec;
+  uint64_t instr_amount_res;
+  uint64_t input_matrix_buffer_bytes;
+  uint64_t peak_perf;
+  uint64_t fclk;
+  uint64_t runtime_cycles;
+  uint64_t runtime_ns;
+  uint64_t achieved_perf;
+  uint64_t workload_oi_read;
+  uint64_t workload_oi_write;
+  uint64_t hw_comp_bound_oi_read;
+  uint64_t hw_comp_bound_oi_write;
+  uint64_t ctrl_state_fetch_csGetCmd;
+  uint64_t ctrl_state_fetch_csRun;
+  uint64_t ctrl_state_fetch_csSend;
+  uint64_t ctrl_state_fetch_csReceive;
+  uint64_t ctrl_state_exec_csGetCmd;
+  uint64_t ctrl_state_exec_csRun;
+  uint64_t ctrl_state_exec_csSend;
+  uint64_t ctrl_state_exec_csReceive;
+  uint64_t ctrl_state_res_csGetCmd;
+  uint64_t ctrl_state_res_csRun;
+  uint64_t ctrl_state_res_csSend;
+  uint64_t ctrl_state_res_csReceive;
+  uint64_t dram_reads;
+  uint64_t peak_rd_bandwidth;
+  uint64_t effective_rd_bandwidth;
+  uint64_t fetch_rd_bandwidth;
+  uint64_t dram_writes;
+  uint64_t peak_wr_bandwidth;
+  uint64_t effective_wr_bandwidth;
+  uint64_t result_wr_bandwidth;
+  uint64_t execute_stage_efficiency;
+} PerfData;
+
 typedef uint64_t PackedBitGroupType;
 typedef int32_t ResultType;
 
 class BitSerialMatMulAccelDriver
 {
 public:
-  BitSerialMatMulAccelDriver(WrapperRegDriver *platform)
+  BitSerialMatMulAccelDriver()
   {
-    m_platform = platform;
-    m_accel = new BitSerialMatMulAccel(m_platform);
+
+    m_accel = new BitSerialMatMulAccel();
     m_fclk = 200.0;
     update_hw_cfg();
     measure_fclk();
@@ -126,17 +168,17 @@ public:
 
   void measure_fclk()
   {
-    // if (m_platform->platformID() != "EmuDriver")
-    // {
-    //   uint32_t cc_start = perf_get_cc();
-    //   perf_set_cc_enable(true);
-    //   // sleep for one second of CPU time
-    //   usleep(1000000);
-    //   perf_set_cc_enable(false);
-    //   uint32_t cc_end = perf_get_cc();
-    //   // million ticks per second = fclk in MHz
-    //   m_fclk = (float)(cc_end - cc_start) / 1000000.0;
-    // }
+    int n = CLOCKS_PER_SEC / 100;
+    uint32_t cc_start = perf_get_cc();
+    perf_set_cc_enable(true);
+    // sleep for one second of CPU time
+    clock_t t1 = clock();
+    while (clock() <= t1 + n && clock() >= t1)
+      ;
+    perf_set_cc_enable(false);
+    uint32_t cc_end = perf_get_cc();
+    // million ticks per second = fclk in MHz
+    m_fclk = (float)(cc_end - cc_start) / 1000000.0;
   }
 
   float fclk_MHz() const
@@ -250,8 +292,8 @@ public:
   // TODO how does this work in practise for MMIO?
   void reset()
   {
-    m_platform->writeReg(0, 1);
-    m_platform->writeReg(0, 0);
+    // m_platform->writeReg(0, 1);
+    // m_platform->writeReg(0, 0);
   }
 
   // enable/disable the execution of each stage
@@ -278,7 +320,7 @@ public:
     m_accel->set_ins_bits_lhs_l0_per_l1(icfg.lhs_l0_per_l1);
     m_accel->set_ins_bits_wait_complete_bytes(icfg.wait_complete_bytes);
     m_accel->set_ins_bits_dram_skip(icfg.dram_skip);
-    m_accel->set_ins_bits_dram_base((uint64_t) icfg.res_dram_base);
+    m_accel->set_ins_bits_dram_base((uint64_t)icfg.res_dram_base);
     m_accel->set_ins_bits_negate(icfg.negate);
     m_accel->set_ins_bits_shiftAmount(icfg.shift_amount);
     m_accel->set_ins_bits_numTiles(icfg.num_tiles);
@@ -286,8 +328,8 @@ public:
     m_accel->set_ins_bits_dram_block_count(icfg.dram_block_count);
     m_accel->set_ins_bits_dram_block_size_bytes(icfg.dram_block_size_bytes);
     m_accel->set_ins_bits_dram_block_offset_bytes(icfg.dram_block_offset_bytes);
-    m_accel->set_ins_bits_dram_base_rhs((uint64_t) icfg.fetch_dram_base_rhs);
-    m_accel->set_ins_bits_dram_base_lhs((uint64_t) icfg.fetch_dram_base_lhs);
+    m_accel->set_ins_bits_dram_base_rhs((uint64_t)icfg.fetch_dram_base_rhs);
+    m_accel->set_ins_bits_dram_base_lhs((uint64_t)icfg.fetch_dram_base_lhs);
     m_accel->set_ins_valid(1);
   }
 
@@ -324,7 +366,6 @@ public:
 
 protected:
   BitSerialMatMulAccel *m_accel;
-  WrapperRegDriver *m_platform;
   HardwareCfg m_cfg;
   float m_fclk;
 

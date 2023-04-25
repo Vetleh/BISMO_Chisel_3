@@ -32,46 +32,45 @@
 #include "BISMOTests.hpp"
 
 // read matrix dimensions from stdin and run a bit-serial matmul benchmark
-void benchmark_interactive(
-  WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
-) {
-  while(1) {
-    int rows, depth, cols, lhsbits, rhsbits, lhssigned, rhssigned;
-    float secs;
-    cout << "Enter rows depth cols, 0 to skip, -1 to quit " << endl;
-    cin >> rows;
-    if(rows == 0) {
-      break;
-    } else if (rows == -1) {
-      exit(0);
-    }
-    cin >> depth >> cols;
-    cout << "Enter lhs and rhs bits: " << endl;
-    cin >> lhsbits >> rhsbits;
-    cout << "Enter signedness (1 or 0) for lhs and rhs: " << endl;
-    cin >> lhssigned >> rhssigned;
+// void benchmark_interactive(
+//   WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
+// ) {
+//   while(1) {
+//     int rows, depth, cols, lhsbits, rhsbits, lhssigned, rhssigned;
+//     float secs;
+//     cout << "Enter rows depth cols, 0 to skip, -1 to quit " << endl;
+//     cin >> rows;
+//     if(rows == 0) {
+//       break;
+//     } else if (rows == -1) {
+//       exit(0);
+//     }
+//     cin >> depth >> cols;
+//     cout << "Enter lhs and rhs bits: " << endl;
+//     cin >> lhsbits >> rhsbits;
+//     cout << "Enter signedness (1 or 0) for lhs and rhs: " << endl;
+//     cin >> lhssigned >> rhssigned;
 
-    test(
-      to_string(rows) + "x" + to_string(depth) + "x" + to_string(cols) + ":" +
-      to_string(lhsbits) + "b/" + to_string(rhsbits) + "b",
-      platform, acc, rows, cols, depth, lhsbits, rhsbits, lhssigned, rhssigned
-    );
-  }
-}
+//     test(
+//       to_string(rows) + "x" + to_string(depth) + "x" + to_string(cols) + ":" +
+//       to_string(lhsbits) + "b/" + to_string(rhsbits) + "b",
+//       platform, acc, rows, cols, depth, lhsbits, rhsbits, lhssigned, rhssigned
+//     );
+//   }
+// }
 
 int main(int argc, char const *argv[]) {
-  WrapperRegDriver * platform = initPlatform();
-  BitSerialMatMulAccelDriver * acc = new BitSerialMatMulAccelDriver(platform);
+  BitSerialMatMulAccelDriver * acc = new BitSerialMatMulAccelDriver();
   acc->print_hwcfg_summary();
 
   // Uncomment to enable interactive benchmarking:
   // benchmark_interactive(platform, acc);
 
   bool all_OK = true;
-  all_OK &= test_binary_onchip_onetile(platform, acc);
-  all_OK &= test_binary_onchip_multitile(platform, acc);
-  all_OK &= test_binary_offchip_multitile(platform, acc);
-  all_OK &= test_binary_offchip_widerows_multitile(platform, acc);
+  all_OK &= test_binary_onchip_onetile(acc);
+  all_OK &= test_binary_onchip_multitile(acc);
+  all_OK &= test_binary_offchip_multitile(acc);
+  all_OK &= test_binary_offchip_widerows_multitile(acc);
 
   if(all_OK) {
     cout << "All tests passed succesfully" << endl;
@@ -80,6 +79,5 @@ int main(int argc, char const *argv[]) {
   }
 
   delete acc;
-  deinitPlatform(platform);
   return 0;
 }
