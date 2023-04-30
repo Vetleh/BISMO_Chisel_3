@@ -75,13 +75,19 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
   // Set this true to trigger an interrupt on the processor (please refer to supervisor documentation)
   io.interrupt := false.B
 
-  // TODO hook all the registers up to bismo
+  val dpaDimLHS = 8;
+  val dpaDimRHS = 8
+  val dpaDimCommon = 256;
+  val lhsEntriesPerMem = 64 * 32 * 1024 / (dpaDimLHS * dpaDimCommon)
+  val rhsEntriesPerMem = 64 * 32 * 1024 / (dpaDimRHS * dpaDimCommon)
+
   val bismoInitParams = new BitSerialMatMulParams(
-    dpaDimLHS = 2,
-    dpaDimRHS = 2,
-    dpaDimCommon = 128,
-    lhsEntriesPerMem = 128,
-    rhsEntriesPerMem = 128,
+    dpaDimLHS = dpaDimLHS,
+    dpaDimRHS = dpaDimRHS,
+    dpaDimCommon = dpaDimCommon,
+    lhsEntriesPerMem = lhsEntriesPerMem,
+    rhsEntriesPerMem = rhsEntriesPerMem,
+    // TODO make seperate for FPGA
     mrp = PYNQZ1Params.toMemReqParams()
   )
 
@@ -93,7 +99,7 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
 
   // Reset for accelerator
   bismo.reset.asBool
-  when(regfile(0) === 1.U){
+  when(regfile(0) === 1.U) {
     bismo.reset := true.B
   }.otherwise {
     bismo.reset := false.B
@@ -139,8 +145,8 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
   // perf result
   regfile(24) := impl.perf.prf_res.count
   impl.perf.prf_res.sel := regfile(25)
-  
-  regfile(26) := impl.ins.ready 
+
+  regfile(26) := impl.ins.ready
   impl.ins.valid := regfile(27)
   impl.ins.bits.dram_base_lhs := regfile(28)
   impl.ins.bits.dram_base_rhs := regfile(29)
@@ -168,7 +174,6 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
   impl.ins.bits.rhs_bytes_per_l2 := regfile(48)
   impl.ins.bits.nrows_a := regfile(49)
   impl.ins.bits.dpa_z_bytes := regfile(50)
-  
 
   val axi = outer.l2mem(0).module.io.axi
   // Memory requests
@@ -205,7 +210,9 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
   impl.memPort(0).memWrDat.ready := axi.w.ready
   axi.w.valid := impl.memPort(0).memWrDat.valid
   axi.w.bits.data := impl.memPort(0).memWrDat.bits
-  axi.w.bits.strb := (Math.pow(2,(bismoInitParams.mrp.dataWidth / 8)).toInt - 1).U
+  axi.w.bits.strb := (Math
+    .pow(2, (bismoInitParams.mrp.dataWidth / 8))
+    .toInt - 1).U
 
   // MemWrRsp
   axi.b.ready := impl.memPort(0).memWrRsp.ready

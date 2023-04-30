@@ -292,8 +292,8 @@ public:
   // TODO how does this work in practise for MMIO?
   void reset()
   {
-    // m_platform->writeReg(0, 1);
-    // m_platform->writeReg(0, 0);
+    m_accel->reset_accel(1);
+    m_accel->reset_accel(0);
   }
 
   // enable/disable the execution of each stage

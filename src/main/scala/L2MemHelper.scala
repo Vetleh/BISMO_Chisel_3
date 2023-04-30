@@ -30,8 +30,8 @@ class L2MemHelper()(implicit p: Parameters) extends LazyModule {
   (masterNode
     := TLBuffer()
     := TLWidthWidget(dataWidthAXI / 8)
-    := AXI4ToTL(numTlTxns = 64)
-    := AXI4UserYanker(capMaxFlight = Some(64))
+    := AXI4ToTL(numTlTxns = 256)
+    := AXI4UserYanker(capMaxFlight = Some(256))
     := AXI4Fragmenter()
     := AXI4IdIndexer(idBits = 6)
     := AXI4Buffer()

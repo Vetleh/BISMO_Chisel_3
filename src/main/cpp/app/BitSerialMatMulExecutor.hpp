@@ -62,12 +62,43 @@ public:
     m_bytes_to_write = 0;
     // TODO verify alignment etc for instantiated hardware dimensions
     // allocate accelerator memory for given shape
-    m_accelLHSVirt = aligned_alloc(4096, lhsBytes());
-    m_accelRHSVirt = aligned_alloc(4096, rhsBytes());
-    m_accelResVirt = aligned_alloc(4096, resBytes());
-    m_accelLHS = (void *)syscall(338, m_accelLHSVirt, 0);
-    m_accelRHS = (void *)syscall(338, m_accelRHSVirt, 0);
-    m_accelRes = (void *)syscall(338, m_accelResVirt, 0);
+    // allocate accelerator memory for given shape
+    // Aligned by 64 bytes
+    uint64_t lhs_bytes = lhsBytes();
+    uint64_t rhs_bytes = rhsBytes();
+    uint64_t res_bytes = resBytes();
+    if (lhs_bytes > 4096)
+    {
+      lhs_bytes = roundUp(lhs_bytes, 4096);
+    }
+    if (rhs_bytes > 4096)
+    {
+      rhs_bytes = roundUp(rhs_bytes, 4096);
+    }
+    if (res_bytes > 4096)
+    {
+      res_bytes = roundUp(res_bytes, 4096);
+    }
+
+    m_accelLHSVirt = aligned_alloc(4096, lhs_bytes);
+    for (int i = 0; i < lhs_bytes / sizeof(ResultType); i += 4096 / sizeof(ResultType))
+    {
+      ((ResultType *)m_accelLHSVirt)[i] = 0;
+    }
+    m_accelRHSVirt = aligned_alloc(4096, rhs_bytes);
+    for (int i = 0; i < rhs_bytes / sizeof(ResultType); i += 4096 / sizeof(ResultType))
+    {
+      ((ResultType *)m_accelRHSVirt)[i] = 0;
+    }
+    m_accelResVirt = aligned_alloc(4096, res_bytes);
+    for (int i = 0; i < res_bytes / sizeof(ResultType); i += 4096 / sizeof(ResultType))
+    {
+      ((ResultType *)m_accelResVirt)[i] = 0;
+    }
+
+    m_accelLHS = (void *)syscall(SYS_get_paddr, m_accelLHSVirt, lhs_bytes);
+    m_accelRHS = (void *)syscall(SYS_get_paddr, m_accelRHSVirt, rhs_bytes);
+    m_accelRes = (void *)syscall(SYS_get_paddr, m_accelResVirt, res_bytes);
     // indicate that nothing is cached on-chip yet
     for (unsigned int i = 0; i < FETCHEXEC_TOKENS; i++)
     {
@@ -86,6 +117,18 @@ public:
     free(m_accelLHSVirt);
     free(m_accelRHSVirt);
     free(m_accelResVirt);
+  }
+
+  int roundUp(int numToRound, int multiple)
+  {
+    if (multiple == 0)
+      return numToRound;
+
+    int remainder = numToRound % multiple;
+    if (remainder == 0)
+      return numToRound;
+
+    return numToRound + multiple - remainder;
   }
 
   bool write_json()
