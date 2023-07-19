@@ -13,7 +13,7 @@ import freechips.rocketchip.tilelink._
 import freechips.rocketchip.system.DefaultConfig
 import freechips.rocketchip.amba.axi4._
 
-class BISMOAccel(opcodes: OpcodeSet, val n: Int = 50)(implicit p: Parameters)
+class BISMOAccel(opcodes: OpcodeSet, val n: Int = 51)(implicit p: Parameters)
     extends LazyRoCC(opcodes) {
   override lazy val module = new BISMOAccelImp(this)
   val l2mem = (0 until 1).map { x =>
@@ -88,7 +88,7 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
     lhsEntriesPerMem = lhsEntriesPerMem,
     rhsEntriesPerMem = rhsEntriesPerMem,
     // TODO make seperate for FPGA
-    mrp = PYNQZ1Params.toMemReqParams()
+    mrp = PYNQZ1Params.toMemReqParams(),
   )
 
   // Instansiate BISMO
@@ -106,7 +106,7 @@ class BISMOAccelImp(outer: BISMOAccel)(implicit p: Parameters)
   }
 
   // Signature of the accelerator
-  impl.signature := regfile(1)
+  regfile(1) := impl.signature
 
   // Stage enables
   impl.fetch_enable := regfile(2)

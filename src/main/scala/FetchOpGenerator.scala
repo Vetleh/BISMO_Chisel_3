@@ -4,9 +4,9 @@ import chisel3._
 import chisel3.util._
 
 class FetchOpGeneratorIn() extends Bundle {
-  val z_l2_per_matrix = UInt(64.W)
-  val lhs_l2_per_matrix = UInt(64.W)
-  val rhs_l2_per_matrix = UInt(64.W)
+  val z_l2_per_matrix = UInt(32.W)
+  val lhs_l2_per_matrix = UInt(32.W)
+  val rhs_l2_per_matrix = UInt(32.W)
 }
 
 class FetchOpGeneratorIO() extends Bundle {
@@ -33,27 +33,20 @@ class FetchOpGenerator() extends Module {
     isHigh := false.B
     io.in.ready := false.B
     io.out.valid := false.B
-  }.otherwise {
-    when(counter < total_iters && io.in.valid && io.out.ready) {
-      isHigh := true.B
-      io.out.valid := true.B
-      when(opcode_counter === 0.U) {
-        io.out.bits.opcode := 2.U
-      }.elsewhen(opcode_counter === 1.U)(
-        io.out.bits.opcode := 0.U
-      ).elsewhen(opcode_counter === 2.U) {
-        io.out.bits.opcode := 0.U
-      }.elsewhen(opcode_counter === 3.U) {
-        io.out.bits.opcode := 1.U
-        counter := counter + 1.U
-      }
-      opcode_counter := opcode_counter + 1.U
+  }.elsewhen(counter < total_iters && io.in.valid && io.out.ready) {
+    isHigh := true.B
+    io.out.valid := true.B
+    io.in.ready := false.B
+    when(opcode_counter === 0.U) {
+      io.out.bits.opcode := 2.U
+    }.elsewhen(opcode_counter === 1.U)(
+      io.out.bits.opcode := 0.U
+    ).elsewhen(opcode_counter === 2.U) {
+      io.out.bits.opcode := 0.U
+    }.elsewhen(opcode_counter === 3.U) {
+      io.out.bits.opcode := 1.U
+      counter := counter + 1.U
     }
-  }
-
-  when(!io.in.valid){
-    counter := 0.U
-    opcode_counter := 0.U
-    isHigh := false.B
+    opcode_counter := opcode_counter + 1.U
   }
 }

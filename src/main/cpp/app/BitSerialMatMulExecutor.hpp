@@ -39,6 +39,7 @@
 #define min(x, y) (x < y ? x : y)
 #define max(x, y) (x > y ? x : y)
 #define INVALID_CACHE_ENTRY (uint64_t) - 1
+#define SYS_get_paddr 338
 
 // TODO:
 // - define own context allocator for the accelerator, including
@@ -64,6 +65,7 @@ public:
     // allocate accelerator memory for given shape
     // allocate accelerator memory for given shape
     // Aligned by 64 bytes
+
     uint64_t lhs_bytes = lhsBytes();
     uint64_t rhs_bytes = rhsBytes();
     uint64_t res_bytes = resBytes();
@@ -105,10 +107,8 @@ public:
       m_cached_lhs.push_back(INVALID_CACHE_ENTRY);
       m_cached_rhs.push_back(INVALID_CACHE_ENTRY);
     }
-    // build schedule for each stage based on shape
-    build_schedule_trivial();
     m_acc->reset();
-    m_acc->set_stage_enables(1, 1, 1);
+    build_schedule_trivial();
   }
 
   ~BitSerialMatMulExecutor()
@@ -238,21 +238,15 @@ public:
   void run()
   {
     m_acc->set_stage_enables(0, 0, 0);
-
     // start the cycle counter
     m_acc->perf_set_cc_enable(true);
     // enable all stages
     m_acc->set_stage_enables(1, 1, 1);
-    // run the generated schedule -- keep pushing operands until all generated
-    // instructions have been pushed
 
     m_acc->do_instruction(icfg);
-
     // wait until the result stage has no instructions std::left (= all finished)
-
     while (!m_acc->allFinished())
-      ;
-
+      ;   
     // disable all stages
     m_acc->set_stage_enables(0, 0, 0);
     // stop the cycle counter
@@ -576,6 +570,7 @@ protected:
 
   void build_schedule_trivial()
   {
+    // 32x1048576x32
     HardwareCfg cfg = m_acc->hwcfg();
     const uint32_t dpa_y = cfg.dpaDimLHS;    // DPA Y dimension
     const uint32_t dpa_x = cfg.dpaDimRHS;    // DPA X dimension
@@ -591,7 +586,6 @@ protected:
     assert(dpa_z >= cfg.readChanWidth);
     assert(dpa_z % cfg.readChanWidth == 0);
     const size_t exec_to_fetch_width_ratio = dpa_z / cfg.readChanWidth;
-
     const uint32_t lhs_l0_per_bram = cfg.lhsEntriesPerMem / bram_regions;
     const uint32_t rhs_l0_per_bram = cfg.rhsEntriesPerMem / bram_regions;
 
@@ -660,7 +654,6 @@ protected:
         .res_dram_base = (void *)res_base,
         .dram_skip = lhs_eff_rows() * sizeof(ResultType),
         .wait_complete_bytes = resBytes(),
-
         .z_l2_per_matrix = (uint32_t)z_l2_per_matrix,
         .lhs_l2_per_matrix = (uint32_t)lhs_l2_per_matrix,
         .rhs_l2_per_matrix = (uint32_t)rhs_l2_per_matrix,
@@ -673,44 +666,5 @@ protected:
         .rhs_l1_per_l2 = (uint32_t)rhs_l1_per_l2,
         .nrows_a = (uint32_t)lhs_eff_rows(),
     };
-
-    for (int lhs_l2 = 0; lhs_l2 < lhs_l2_per_matrix; lhs_l2++)
-    {
-      for (int rhs_l2 = 0; rhs_l2 < rhs_l2_per_matrix; rhs_l2++)
-      {
-        for (int z_l2 = 0; z_l2 < z_l2_per_matrix; z_l2++)
-        {
-          void *lhs_dram_base = (void *)(fetch_base_lhs + lhs_l2 * z_l2_per_matrix * lhs_bytes_per_l2 + z_l2 * lhs_l0_per_l1 * dpa_z_bytes);
-          void *rhs_dram_base = (void *)(fetch_base_rhs + rhs_l2 * z_l2_per_matrix * rhs_bytes_per_l2 + z_l2 * rhs_l0_per_l1 * dpa_z_bytes);
-          // only issue fetch if not already in cache
-          if (m_cached_lhs[current_bram_region] != (uint64_t)lhs_dram_base)
-          {
-            m_bytes_to_fetch += lhs_bytes_per_l2;
-            m_cached_lhs[current_bram_region] = (uint64_t)lhs_dram_base;
-          }
-
-          // only issue fetch if not already in cache
-          if (m_cached_rhs[current_bram_region] != (uint64_t)rhs_dram_base)
-          {
-            m_bytes_to_fetch += rhs_bytes_per_l2;
-            m_cached_rhs[current_bram_region] = (uint64_t)rhs_dram_base;
-          }
-
-          // process combinations of L1 tiles within the L2 tile
-          for (int lhs_l1 = 0; lhs_l1 < lhs_l1_per_l2; lhs_l1++)
-          {
-            for (int rhs_l1 = 0; rhs_l1 < rhs_l1_per_l2; rhs_l1++)
-            {
-              if (z_l2 == z_l2_per_matrix - 1)
-              {
-                m_bytes_to_write += m_hwcfg.dpaDimLHS * m_hwcfg.dpaDimRHS * sizeof(ResultType);
-                current_resmem_region = current_resmem_region < resmem_regions - 1 ? current_resmem_region + 1 : 0;
-              }
-            }
-          }
-          current_bram_region = current_bram_region < bram_regions - 1 ? current_bram_region + 1 : 0;
-        }
-      }
-    }
   }
 };

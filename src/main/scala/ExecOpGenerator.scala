@@ -4,11 +4,11 @@ import chisel3._
 import chisel3.util._
 
 class ExecOpGeneratorIn() extends Bundle {
-  val z_l2_per_matrix = UInt(64.W)
-  val lhs_l2_per_matrix = UInt(64.W)
-  val rhs_l2_per_matrix = UInt(64.W)
-  val lhs_l1_per_l2 = UInt(64.W)
-  val rhs_l1_per_l2 = UInt(64.W)
+  val z_l2_per_matrix = UInt(32.W)
+  val lhs_l2_per_matrix = UInt(32.W)
+  val rhs_l2_per_matrix = UInt(32.W)
+  val lhs_l1_per_l2 = UInt(16.W)
+  val rhs_l1_per_l2 = UInt(16.W)
 }
 
 class ExecOpGeneratorIO() extends Bundle {
@@ -31,8 +31,6 @@ class ExecOpGenerator() extends Module {
   val sync_getbuffer = RegInit(Bool(), true.B)
   val isHigh = RegInit(Bool(), false.B)
 
-
-
   val io = IO(new ExecOpGeneratorIO())
   // TODO should this be something else?
   io.out.bits.token_channel := 0.U
@@ -52,8 +50,6 @@ class ExecOpGenerator() extends Module {
     io.out.bits.opcode := opcode
     io.out.bits.token_channel := token_channel
   }
-
-  // TODO enum with the tokens
 
   // Non valid signal for cycle so the queue can differentiate between different signals
   when(isHigh && io.in.valid && io.out.ready) {
@@ -139,18 +135,5 @@ class ExecOpGenerator() extends Module {
         }
       }
     }
-  }
-
-  // Reset state machine when input is no longer valid
-  when(!io.in.valid){
-    inner_loop := 0.U
-    z_l2 := 0.U
-    counter := 0.U
-    counter2 := 0.U
-    sync_putfetchbuffer := false.B 
-    init := true.B
-    initCounter := 0.U
-    sync_getbuffer := true.B
-    isHigh := false.B
   }
 }

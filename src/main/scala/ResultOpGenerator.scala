@@ -4,10 +4,10 @@ import chisel3._
 import chisel3.util._
 
 class ResultOpGeneratorIn() extends Bundle {
-  val lhs_l2_per_matrix = UInt(64.W)
-  val rhs_l2_per_matrix = UInt(64.W)
-  val lhs_l1_per_l2 = UInt(64.W)
-  val rhs_l1_per_l2 = UInt(64.W)
+  val lhs_l2_per_matrix = UInt(32.W)
+  val rhs_l2_per_matrix = UInt(32.W)
+  val lhs_l1_per_l2 = UInt(32.W)
+  val rhs_l1_per_l2 = UInt(32.W)
 }
 
 class ResultOpGeneratorIO() extends Bundle {
@@ -24,7 +24,8 @@ class ResultOpGenerator() extends Module {
   val initCounter = RegInit(UInt(1.W), 0.U)
 
   val io = IO(new ResultOpGeneratorIO())
-  // TODO should this be something else?
+  val csGetCmd :: csRun :: csSend :: csReceive :: Nil = Enum(4)
+
   io.out.valid := false.B
   io.out.bits.opcode := 0.U
   io.out.bits.token_channel := 0.U
@@ -37,22 +38,19 @@ class ResultOpGenerator() extends Module {
     isHigh := false.B
     io.in.ready := false.B
     io.out.valid := false.B
-  }.otherwise {
-    when(init && io.in.valid && io.out.ready) {
+  }.elsewhen(io.in.valid && io.out.ready) {
+    isHigh := true.B
+    when(init) {
       io.in.ready := false.B
-      isHigh := true.B
       io.out.valid := true.B
-
       io.out.bits.opcode := 1.U
       initCounter := initCounter + 1.U
       when(initCounter === 1.U) {
         init := false.B
       }
-    }.elsewhen(counter < total_iters && io.in.valid && io.out.ready) {
-      isHigh := true.B
+    }.elsewhen(counter < total_iters) {
       io.in.ready := false.B
       io.out.valid := true.B
-
       when(counter2 === 0.U) {
         io.out.bits.opcode := 2.U
       }.elsewhen(counter2 === 1.U)(
@@ -66,21 +64,12 @@ class ResultOpGenerator() extends Module {
       }.otherwise {
         counter2 := counter2 + 1.U
       }
-    }.elsewhen(counter === total_iters && io.in.valid && io.out.ready) {
-      isHigh := true.B
+    }.elsewhen(counter === total_iters) {
+      io.in.ready := false.B
+      io.out.valid := true.B
       counter := counter + 1.U
       // Create a wait opcode
-      io.out.valid := true.B
       io.out.bits.opcode := 0.U
     }
   }
-
-  when(!io.in.valid) {
-    counter := 0.U
-    counter2 := 0.U
-    isHigh := false.B
-    init := true.B
-    initCounter := 0.U
-  }
-
 }

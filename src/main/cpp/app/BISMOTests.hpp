@@ -74,9 +74,11 @@ bool test(
     runner->printPerfSummary();
     runner->printPerfDetails();
     printmatrix(accel_res, nrows_rhs, nrows_lhs);
+    runner->write_json();
   }
   else
   {
+    runner->write_json();
     cout << "Test failed (" << testName << ")" << endl;
     cout << "Expected: " << endl;
     printmatrix(ctx.res, nrows_rhs, nrows_lhs);

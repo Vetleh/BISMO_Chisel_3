@@ -30,41 +30,11 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "BISMOTests.hpp"
-
-// read matrix dimensions from stdin and run a bit-serial matmul benchmark
-// void benchmark_interactive(
-//   WrapperRegDriver * platform, BitSerialMatMulAccelDriver * acc
-// ) {
-//   while(1) {
-//     int rows, depth, cols, lhsbits, rhsbits, lhssigned, rhssigned;
-//     float secs;
-//     cout << "Enter rows depth cols, 0 to skip, -1 to quit " << endl;
-//     cin >> rows;
-//     if(rows == 0) {
-//       break;
-//     } else if (rows == -1) {
-//       exit(0);
-//     }
-//     cin >> depth >> cols;
-//     cout << "Enter lhs and rhs bits: " << endl;
-//     cin >> lhsbits >> rhsbits;
-//     cout << "Enter signedness (1 or 0) for lhs and rhs: " << endl;
-//     cin >> lhssigned >> rhssigned;
-
-//     test(
-//       to_string(rows) + "x" + to_string(depth) + "x" + to_string(cols) + ":" +
-//       to_string(lhsbits) + "b/" + to_string(rhsbits) + "b",
-//       platform, acc, rows, cols, depth, lhsbits, rhsbits, lhssigned, rhssigned
-//     );
-//   }
-// }
+#include "rocc.h"
 
 int main(int argc, char const *argv[]) {
   BitSerialMatMulAccelDriver * acc = new BitSerialMatMulAccelDriver();
   acc->print_hwcfg_summary();
-
-  // Uncomment to enable interactive benchmarking:
-  // benchmark_interactive(platform, acc);
 
   bool all_OK = true;
   all_OK &= test_binary_onchip_onetile(acc);
