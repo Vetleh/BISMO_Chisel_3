@@ -27,16 +27,6 @@ Some of its key features are:
 * **Software-programmable.** BISMO comes with a [runtime library](doc/software.md) for ease-of-use, and is also programmable with a simple instruction set to
   cater for more advanced users.
 
-## What's New in BISMO?
-
-* **2019-06-10:** BISMO v2 is now released with many improvements and new features. Here's a brief summary:
-  - Runtime library
-  - Instruction generators with tiling support for large matrices
-  - Improved hardware with smaller resource cost
-  - Hardware-accelerated parallel-to-serial conversion
-  - Support for PYNQ on the Avnet Ultra96 (PYNQU96)
-  - Experimental support for cache coherency on (PYNQU96CC)
-
 ## Requirements
 
 ### Full Setup on Linux
