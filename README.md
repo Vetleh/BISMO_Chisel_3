@@ -1,8 +1,5 @@
 # BISMO
 
-<img align="left" src="doc/img/pipeline.svg" alt="drawing" width="300"/>
-
-
 BISMO is a programmable FPGA accelerator for few-bit integer matrix multiplication.
 It offers high-performance matrix multiplication for matrices where each
 element is a few-bit integer (e.g. 2, 3, 4 ... bits).
@@ -32,10 +29,9 @@ Some of its key features are:
 ### Full Setup on Linux
 1. A working [`sbt`](https://www.scala-sbt.org/1.0/docs/Installing-sbt-on-Linux.html) setup for Chisel2
 2. `zsh` e.g. `sudo apt install zsh` on Ubuntu
-3. [Vivado 2017.4](https://www.xilinx.com/support/download.html) or later (make sure `vivado` is in `PATH`)
-4. `gcc` 4.8 or later
-5. `verilator` e.g. `sudo apt install verilator` on Ubuntu
-6. A supported [PYNQ board](doc/platforms) board with the v2.4 image or later, with network access
+3. `gcc` 4.8 or later
+4. `verilator` e.g. `sudo apt install verilator` on Ubuntu
+5. A supported [PYNQ board](doc/platforms) board with the v2.4 image or later, with network access
 
 ## Quickstart
 
@@ -49,31 +45,6 @@ on a host PC, or on the actual FPGA platform as follows:
 ### Running HW-SW Cosimulation
 1. `cd bismo`
 2. `PLATFORM=VerilatedTester make emu` to run BISMO tests in hardware-software cosimulation.
-
-### Running on the FPGA
-BISMO is built on a *host computer* and deployed on a *target board*. Several [PYNQ boards](doc/platforms.md) are supported, the example below is for the Avnet Ultra96.
-
-On the host computer:
-1. `cd bismo`
-2. `make all` to generate a Ultra96 deployment package with bitfile and drivers.
-This will generate a 2x64x2 array at 200 MHz and will take some time to complete.
-3. Set `PYNQU96_URI` to point to the `rsync` target, including the username, IP
-address and target directory on the Ultra96 board.
-For instance `export PYNQU96_URI=xilinx@192.168.2.10:/home/xilinx/bismo`
-4. `make rsync` to copy deployment package to the Ultra96. You may be prompted
-for the password for the specified Ultra96 user.
-
-Afterwards, run the following on a terminal on the target board:
-1. On the Ultra96, `cd /home/xilinx/bismo/deploy` to go into the deployment package.
-2. `su` to go into superuser mode.
-2. `./compile_rtlib.sh` to compile the driver and runtime library.
-3. `./compile_testapp.sh` to compile the test application.
-3. `./setclk.sh 200` to set the clock to 200 MHz.
-4. `./load_bitfile.sh` to load the BISMO bitfile.
-5. `LD_LIBRARY_PATH=$(pwd) ./testapp t` to run the BISMO tests.
-
-## Documentation
-You will find more detailed documentation under the [`doc`](doc/README.md) folder.
 
 ## Paper
 More details on the hardware design and instruction set can be found in the
